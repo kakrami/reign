@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>Iron Reign: Stage Assault v4.3</title>
+<title>Iron Reign: Stage Assault v4.6</title>
 <style>
   :root {
     --safe-top: env(safe-area-inset-top, 0px);
@@ -11,7 +11,12 @@
     --safe-bottom: env(safe-area-inset-bottom, 0px);
     --safe-left: env(safe-area-inset-left, 0px);
   }
-  * { box-sizing: border-box; }
+  * {
+    box-sizing: border-box;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
   html, body {
     position: fixed;
     inset: 0;
@@ -21,7 +26,10 @@
     overflow: hidden;
     background: #02040a;
     touch-action: none;
+    -webkit-user-select: none;
     user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
     overscroll-behavior: none;
   }
   canvas {
@@ -30,6 +38,11 @@
     top: 0;
     display: block;
     touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-user-drag: none;
+    -webkit-tap-highlight-color: transparent;
   }
 </style>
 </head>
@@ -41,6 +54,22 @@
 
   const canvas = document.getElementById("game");
   const ctx = canvas.getContext("2d", { alpha: false });
+
+  // iOS Safari can still trigger page selection, image dragging, and the
+  // long-press callout even when unprefixed user-select/touch-action are set.
+  // Block only native browser gestures; Pointer Events continue to drive input.
+  const preventNativePageGesture = event => {
+    if (event.cancelable) event.preventDefault();
+  };
+
+  for (const eventName of ["selectstart", "dragstart", "contextmenu"]) {
+    document.addEventListener(eventName, preventNativePageGesture, { capture: true });
+  }
+  for (const eventName of ["gesturestart", "gesturechange", "gestureend"]) {
+    document.addEventListener(eventName, preventNativePageGesture, { passive: false, capture: true });
+  }
+  canvas.addEventListener("touchstart", preventNativePageGesture, { passive: false });
+  canvas.addEventListener("touchmove", preventNativePageGesture, { passive: false });
   const UI_FONT = '"Trebuchet MS", Arial, sans-serif';
   const DEFAULT_SUBTITLE = "Six handcrafted arcade worlds with terrain-aware combat, aerial smash attacks, animated pixel-art bosses, persistent weapons, and cinematic victories.";
   const DIFFICULTY_OPTIONS = [
@@ -75,6 +104,7 @@
   const GRAVITY = 2050;
   const PLAYER_SPEED = 235;
   const STEP = 1 / 60;
+  const CAMERA_MAX_Y = 390;
 
   const WORLD_ZONES = [
     { start: 0, end: 9600, title: "LEVEL 1 • CITY UNDER SIEGE", short: "CITY ASSAULT" },
@@ -185,6 +215,14 @@
     return true;
   };
   const cameraGroundAnchor = () => portrait ? 0.70 : 0.68;
+  const cameraYBounds = () => ({
+    min: -Math.max(260, visibleWorldH - WORLD_H + 210),
+    max: CAMERA_MAX_Y
+  });
+  const clampCameraY = value => {
+    const bounds = cameraYBounds();
+    return clamp(value, bounds.min, bounds.max);
+  };
 
   const touchStick = {
     active: false,
@@ -211,6 +249,8 @@
   let cameraTargetY = 0;
   let cameraHoldX = null;
   let portrait = false;
+  let previousResizePortrait = null;
+  let cameraResizeSnapUntil = 0;
   let safeTop = 0;
   let safeRight = 0;
   let safeBottom = 0;
@@ -414,7 +454,11 @@
     const vh = Math.max(1, Math.round(viewport ? viewport.height : innerHeight));
     const offsetX = Math.round(viewport ? viewport.offsetLeft : 0);
     const offsetY = Math.round(viewport ? viewport.offsetTop : 0);
-    portrait = vh >= vw;
+    const nextPortrait = vh >= vw;
+    const orientationChanged = previousResizePortrait !== null && previousResizePortrait !== nextPortrait;
+    const snapCameraForResize = orientationChanged || performance.now() < cameraResizeSnapUntil;
+    portrait = nextPortrait;
+    previousResizePortrait = portrait;
 
     // Render at the device's real pixel density. UI dimensions are calculated in
     // physical CSS pixels, so increasing resolution improves clarity without
@@ -446,9 +490,25 @@
     const maxCameraX = Math.max(0, LEVEL_W - visibleWorldW);
     cameraX = clamp(cameraX, 0, maxCameraX);
     cameraTargetX = clamp(cameraTargetX, 0, maxCameraX);
-    const baselineY = terrainSurfaceY(cameraX + visibleWorldW * 0.36) - visibleWorldH * cameraGroundAnchor();
-    if (!running || levelState === "menu") cameraY = baselineY;
+
+    let focusY = terrainSurfaceY(cameraX + visibleWorldW * 0.36);
+    const alivePlayers = players.filter(player => !player.dead);
+    if (running && alivePlayers.length) {
+      const leadPlayer = alivePlayers.reduce((best, player) => player.cx > best.cx ? player : best, alivePlayers[0]);
+      focusY = terrainSurfaceY(leadPlayer.cx);
+    }
+
+    const baselineY = clampCameraY(
+      focusY - visibleWorldH * cameraGroundAnchor()
+    );
     cameraTargetY = baselineY;
+
+    // Orientation changes alter visibleWorldH immediately. Keep the terrain at the
+    // same screen anchor instead of easing from the old portrait camera height.
+    if (!running || levelState === "menu" || snapCameraForResize) {
+      cameraY = baselineY;
+      if (snapCameraForResize) accumulator = 0;
+    }
   }
 
   function updateWorldView(dt) {
@@ -468,8 +528,10 @@
   addEventListener("resize", resize, { passive: true });
   addEventListener("orientationchange", () => {
     clearControls();
-    setTimeout(resize, 80);
-    setTimeout(resize, 260);
+    cameraResizeSnapUntil = performance.now() + 700;
+    resize();
+    requestAnimationFrame(resize);
+    setTimeout(resize, 240);
   }, { passive: true });
 
   if (window.visualViewport) {
@@ -3475,45 +3537,59 @@
 
       const direction = this.partner.cx >= this.cx ? 1 : -1;
       const exitMargin = 34;
-      const squadOffset = direction * player.index * (player.w + 14);
-      const exitX = (direction > 0
-        ? this.partner.x + this.partner.w + exitMargin
-        : this.partner.x - player.w - exitMargin) + squadOffset;
-      const exitCenterX = exitX + player.w / 2;
+      const travelers = players
+        .filter(member => !member.dead && !member.portalTransit)
+        .sort((a, b) => a.index - b.index)
+        .map(member => {
+          member.setCrouching(false);
+          const squadOffset = direction * member.index * (member.w + 14);
+          const exitX = (direction > 0
+            ? this.partner.x + this.partner.w + exitMargin
+            : this.partner.x - member.w - exitMargin) + squadOffset;
+          const exitCenterX = exitX + member.w / 2;
+          const exitSurfaceY = terrainSurfaceY(exitCenterX);
+
+          member.vx = 0;
+          member.vy = 0;
+          member.smashing = false;
+          member.supportPlatform = null;
+          member.dropPlatform = null;
+          member.portalCooldown = 1.1;
+          member.portalContact = false;
+          member.portalTransit = true;
+          member.portalHidden = 0;
+          member.invuln = Math.max(member.invuln, 1.4);
+
+          return {
+            player: member,
+            exitX,
+            exitY: exitSurfaceY - member.h,
+            exitSurfaceY
+          };
+        });
+
+      if (!travelers.length) return false;
+
+      const exitCenterX = travelers.reduce(
+        (sum, traveler) => sum + traveler.exitX + traveler.player.w / 2,
+        0
+      ) / travelers.length;
       const exitSurfaceY = terrainSurfaceY(exitCenterX);
-      const exitY = exitSurfaceY - player.h;
       const maxCameraX = Math.max(0, LEVEL_W - visibleWorldW);
       const endCameraX = clamp(exitCenterX - visibleWorldW * 0.43, 0, maxCameraX);
-      const endCameraY = clamp(
-        exitSurfaceY - visibleWorldH * cameraGroundAnchor(),
-        -Math.max(260, visibleWorldH - WORLD_H + 210),
-        210
+      const endCameraY = clampCameraY(
+        exitSurfaceY - visibleWorldH * cameraGroundAnchor()
       );
-
-      player.vx = 0;
-      player.vy = 0;
-      player.setCrouching(false);
-      player.smashing = false;
-      player.supportPlatform = null;
-      player.dropPlatform = null;
-      player.portalCooldown = 1.1;
-      player.portalContact = false;
-      player.portalTransit = true;
-      player.portalHidden = 0;
-      player.invuln = Math.max(player.invuln, 1.4);
 
       enemyBullets = [];
       portalArrivalGrace = 0;
       portalWarp = {
         phase: "enter",
         phaseTime: 0,
-        player,
+        travelers,
         source: this,
         destination: this.partner,
         direction,
-        exitX,
-        exitY,
-        exitSurfaceY,
         startCameraX: cameraX,
         startCameraY: cameraY,
         endCameraX,
@@ -4652,7 +4728,7 @@
     cameraX = clamp(focusX - visibleWorldW * 0.27, 0, maxCameraX);
     cameraTargetX = cameraX;
     const focusY = terrainSurfaceY(focusX);
-    cameraY = focusY - visibleWorldH * cameraGroundAnchor();
+    cameraY = clampCameraY(focusY - visibleWorldH * cameraGroundAnchor());
     cameraTargetY = cameraY;
   }
 
@@ -4879,14 +4955,15 @@
     if (!portalWarp) return false;
 
     const warp = portalWarp;
-    const player = warp.player;
     warp.phaseTime += dt;
     enemyBullets = [];
 
     if (warp.phase === "enter") {
-      player.portalHidden = Math.floor(warp.phaseTime / 0.055) % 2 === 0 ? 0 : 999;
+      const hidden = Math.floor(warp.phaseTime / 0.055) % 2 === 0 ? 0 : 999;
+      for (const traveler of warp.travelers) traveler.player.portalHidden = hidden;
+
       if (warp.phaseTime >= 0.22) {
-        player.portalHidden = 999;
+        for (const traveler of warp.travelers) traveler.player.portalHidden = 999;
         warp.phase = "pan";
         warp.phaseTime = 0;
         audio.toneAt(360, 0.10, "square", 0.07, 220);
@@ -4900,15 +4977,18 @@
       cameraTargetY = cameraY;
 
       if (raw >= 1) {
-        player.x = warp.exitX;
-        player.y = warp.exitY;
-        player.vx = 0;
-        player.vy = 0;
-        player.onGround = true;
-        player.jumpCount = 0;
-        player.facing = warp.direction;
-        player.aimX = warp.direction;
-        player.aimY = 0;
+        for (const traveler of warp.travelers) {
+          const member = traveler.player;
+          member.x = traveler.exitX;
+          member.y = traveler.exitY;
+          member.vx = 0;
+          member.vy = 0;
+          member.onGround = true;
+          member.jumpCount = 0;
+          member.facing = warp.direction;
+          member.aimX = warp.direction;
+          member.aimY = 0;
+        }
         warp.phase = "exit";
         warp.phaseTime = 0;
         burst(warp.destination.cx, warp.destination.cy, warp.color, 10, 115);
@@ -4919,14 +4999,18 @@
       cameraY = warp.endCameraY;
       cameraTargetX = cameraX;
       cameraTargetY = cameraY;
-      player.portalHidden = Math.floor(warp.phaseTime / 0.065) % 2 === 0 ? 999 : 0;
+      const hidden = Math.floor(warp.phaseTime / 0.065) % 2 === 0 ? 999 : 0;
+      for (const traveler of warp.travelers) traveler.player.portalHidden = hidden;
 
       if (warp.phaseTime >= 0.30) {
-        player.portalHidden = 0;
-        player.portalTransit = false;
-        player.entryTimer = Math.max(player.entryTimer, 0.28);
-        player.invuln = Math.max(player.invuln, 1.25);
-        player.portalCooldown = 0.85;
+        for (const traveler of warp.travelers) {
+          const member = traveler.player;
+          member.portalHidden = 0;
+          member.portalTransit = false;
+          member.entryTimer = Math.max(member.entryTimer, 0.28);
+          member.invuln = Math.max(member.invuln, 1.25);
+          member.portalCooldown = 0.85;
+        }
         portalArrivalGrace = 0.80;
         enemyBullets = [];
         portalWarp = null;
@@ -4954,7 +5038,7 @@
       const enteredWhileHeld = down && Boolean(touching) && !player.portalContact;
 
       if (touching && player.portalCooldown <= 0 && (pressedNow || enteredWhileHeld)) {
-        touching.transport(player);
+        if (touching.transport(player)) break;
       }
 
       player.portalContact = portals.some(portal => portal.canActivate(player));
@@ -5148,10 +5232,9 @@
     }
     if (victoryScene) focusY = victoryScene.y + victoryScene.h * 0.62;
 
-    cameraTargetY = focusY - visibleWorldH * cameraGroundAnchor();
-    const minCameraY = -Math.max(260, visibleWorldH - WORLD_H + 210);
-    const maxCameraY = 210;
-    cameraTargetY = clamp(cameraTargetY, minCameraY, maxCameraY);
+    cameraTargetY = clampCameraY(
+      focusY - visibleWorldH * cameraGroundAnchor()
+    );
     const yBlend = 1 - Math.exp(-5.4 * dt);
     const yStep = (cameraTargetY - cameraY) * yBlend;
     cameraY += clamp(yStep, -250 * dt, 250 * dt);
@@ -5908,17 +5991,28 @@
 
     if (menuResult) {
       ctx.fillStyle = menuResult.startsWith("CAMPAIGN") ? "#6dff82" : "#ff695b";
-      ctx.font = `900 ${compact ? 8 : 10}px ${UI_FONT}`;
+      const resultSize = fitCanvasText(menuResult, panelW - 24, compact ? 8 : 10, 6);
+      ctx.font = `900 ${resultSize}px ${UI_FONT}`;
       ctx.fillText(menuResult, canvas.width / 2, y + panelH * 0.89);
     } else {
       ctx.fillStyle = "#7f97a3";
-      ctx.font = `700 ${compact ? 6 : 7}px ${UI_FONT}`;
-      ctx.fillText(compact ? "A STRIKE • B FIRE • C JUMP • X FULLSCREEN" : "MOVE/AIM • DOWN CROUCH/AIR-AIM • C DOUBLE-JUMP • DOWN+C SMASH • A STRIKE • B FIRE • X FULLSCREEN", canvas.width / 2, y + panelH * 0.89);
+      if (portrait && !compact) {
+        ctx.font = `700 7px ${UI_FONT}`;
+        ctx.fillText("LEFT HALF MOVE/AIM • DOWN CROUCH • C JUMP/SMASH", canvas.width / 2, y + panelH * 0.875);
+        ctx.fillText("A STRIKE • B FIRE • X FULLSCREEN", canvas.width / 2, y + panelH * 0.895);
+      } else {
+        const instruction = compact
+          ? "A STRIKE • B FIRE • C JUMP • X FULLSCREEN"
+          : "MOVE/AIM • DOWN CROUCH/AIR-AIM • C DOUBLE-JUMP • DOWN+C SMASH • A STRIKE • B FIRE • X FULLSCREEN";
+        const instructionSize = fitCanvasText(instruction, panelW - 24, compact ? 6 : 7, 5);
+        ctx.font = `700 ${instructionSize}px ${UI_FONT}`;
+        ctx.fillText(instruction, canvas.width / 2, y + panelH * 0.89);
+      }
     }
     ctx.fillStyle = "#536675";
     ctx.font = `700 7px ${UI_FONT}`;
     ctx.textAlign = "right";
-    ctx.fillText("v4.3 • FLOATING CONTROL", x + panelW - 9, y + panelH - 8);
+    ctx.fillText("v4.6 • MULTI-TOUCH CONTROL", x + panelW - 9, y + panelH - 8);
   }
 
   function drawHealthCard(player, x, y, right = false) {
@@ -6199,7 +6293,6 @@
     ctx.lineJoin = "round";
     ctx.lineCap = "round";
     if (!running && levelState === "menu") {
-      time += 1 / 60;
       drawCanvasMenu();
       return;
     }
@@ -6284,6 +6377,8 @@
     const frame = Math.min(0.05, (now - last) / 1000);
     last = now;
 
+    if (!running && levelState === "menu") time += frame;
+
     if (running && !paused) {
       if (hitStop > 0) {
         hitStop = Math.max(0, hitStop - frame);
@@ -6358,19 +6453,50 @@
     }
   }
 
-  function pressCanvasAction(pointerId, code) {
-    pointerActions.set(pointerId, code);
-    touchKeys[code] = true;
-    if (code === "KeyW" || code === "KeyG") queuePress(code);
+  function refreshTouchActions() {
+    for (const code of ["KeyF", "KeyW", "KeyG"]) touchKeys[code] = false;
+    for (const codes of pointerActions.values()) {
+      for (const code of codes) touchKeys[code] = true;
+    }
+  }
+
+  function actionCodesAtPoint(point, event) {
+    const contactX = Math.max(0, (event.width || 1) * dpr * 0.34);
+    const contactY = Math.max(0, (event.height || 1) * dpr * 0.34);
+    const codes = [];
+
+    for (const [code, rect] of Object.entries(uiRects.buttons)) {
+      const rx = rect.r * 1.12 + contactX;
+      const ry = rect.r * 1.12 + contactY;
+      const dx = (point.x - rect.x) / Math.max(1, rx);
+      const dy = (point.y - rect.y) / Math.max(1, ry);
+      if (dx * dx + dy * dy <= 1) codes.push(code);
+    }
+    return codes;
+  }
+
+  function addCanvasActions(pointerId, codes) {
+    if (!codes.length) return false;
+    let held = pointerActions.get(pointerId);
+    if (!held) {
+      held = new Set();
+      pointerActions.set(pointerId, held);
+    }
+
+    let changed = false;
+    for (const code of codes) {
+      if (held.has(code)) continue;
+      held.add(code);
+      changed = true;
+      if (code === "KeyW" || code === "KeyG") queuePress(code);
+    }
+    if (changed) refreshTouchActions();
+    return true;
   }
 
   function releaseCanvasPointer(pointerId) {
     if (touchStick.active && pointerId === touchStick.pointerId) resetJoystick(true);
-    const code = pointerActions.get(pointerId);
-    if (code) {
-      pointerActions.delete(pointerId);
-      touchKeys[code] = [...pointerActions.values()].includes(code);
-    }
+    if (pointerActions.delete(pointerId)) refreshTouchActions();
   }
 
   function cycleMenuLevel(delta) {
@@ -6420,12 +6546,8 @@
     if (paused || stageIntro || levelTransition || portalWarp) return;
 
     if (isTouch) {
-      for (const [code, rect] of Object.entries(uiRects.buttons)) {
-        if (Math.hypot(point.x - rect.x, point.y - rect.y) <= rect.r * 1.16) {
-          pressCanvasAction(event.pointerId, code);
-          return;
-        }
-      }
+      const actionCodes = actionCodesAtPoint(point, event);
+      if (addCanvasActions(event.pointerId, actionCodes)) return;
 
       if (!touchStick.active && point.x <= canvas.width * 0.5) {
         const cssW = canvas.width / dpr;
@@ -6446,11 +6568,17 @@
   });
 
   canvas.addEventListener("pointermove", event => {
-    if (touchStick.active && event.pointerId === touchStick.pointerId) {
-      event.preventDefault();
-      const point = canvasPoint(event);
-      updateStickPoint(point.x, point.y);
-    }
+    const controlsJoystick = touchStick.active && event.pointerId === touchStick.pointerId;
+    const controlsActions = pointerActions.has(event.pointerId);
+    if (!controlsJoystick && !controlsActions) return;
+
+    event.preventDefault();
+    const point = canvasPoint(event);
+    if (controlsJoystick) updateStickPoint(point.x, point.y);
+
+    // A button pointer keeps its original action held and can collect another
+    // action while sliding across it. This supports B+Jump with one broad finger.
+    if (controlsActions) addCanvasActions(event.pointerId, actionCodesAtPoint(point, event));
   });
 
   for (const name of ["pointerup", "pointercancel", "lostpointercapture"]) {
