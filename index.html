@@ -3,690 +3,71 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>Iron Reign: Terrain Assault</title>
+<title>Iron Reign: Canvas Assault v4.0</title>
 <style>
   :root {
-    --app-h: 100dvh;
-    --controls-h: 0px;
-    --panel: #080d1a;
-    --line: #6f8fa8;
-    --text: #f4f1d0;
-    --muted: #9db3bd;
-    --hot: #ff4b3e;
-    --cyan: #4ce8ff;
-    --gold: #ffd34d;
-    --shadow: #02040a;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-right: env(safe-area-inset-right, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-left: env(safe-area-inset-left, 0px);
   }
-
   * { box-sizing: border-box; }
-
   html, body {
+    position: fixed;
+    inset: 0;
     width: 100%;
     height: 100%;
     margin: 0;
     overflow: hidden;
     background: #02040a;
-    color: var(--text);
-    font-family: "Courier New", Courier, monospace;
     touch-action: none;
     user-select: none;
     overscroll-behavior: none;
   }
-
-  body { display: grid; place-items: center; }
-
-  #shell {
-    width: 100vw;
-    height: var(--app-h);
-    overflow: hidden;
-    display: grid;
-    grid-template-rows: minmax(0, 1fr) 0;
-    background: #02040a;
-  }
-
-  #shell.touch-active {
-    grid-template-rows: minmax(0, 1fr) var(--controls-h);
-  }
-
-  #playfield {
-    position: relative;
-    min-width: 0;
-    min-height: 0;
-    overflow: hidden;
-    background: #050914;
-    border: 4px solid #111b2b;
-  }
-
-  #playfield::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    z-index: 15;
-    pointer-events: none;
-    background:
-      repeating-linear-gradient(
-        to bottom,
-        rgba(255,255,255,.025) 0,
-        rgba(255,255,255,.025) 1px,
-        rgba(0,0,0,.09) 2px,
-        rgba(0,0,0,.09) 4px
-      );
-    box-shadow: inset 0 0 42px rgba(0,0,0,.72);
-    mix-blend-mode: screen;
-  }
-
   canvas {
+    position: fixed;
+    left: 0;
+    top: 0;
     display: block;
-    width: 100%;
-    height: 100%;
-    image-rendering: pixelated;
-    image-rendering: crisp-edges;
-    filter: saturate(1.16) contrast(1.08);
-  }
-
-  #hud {
-    position: absolute;
-    inset: 0;
-    z-index: 16;
-    pointer-events: none;
-  }
-
-  .topbar {
-    position: absolute;
-    top: max(7px, env(safe-area-inset-top));
-    left: 8px;
-    right: 8px;
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 8px;
-  }
-
-  .hud-card {
-    min-width: 154px;
-    max-width: 44%;
-    padding: 6px 8px;
-    border: 3px solid #6f8fa8;
-    border-radius: 0;
-    background: #07101d;
-    box-shadow: 4px 4px 0 #02040a;
-  }
-
-  .hud-card.right { text-align: right; }
-
-  .hud-title {
-    font-size: 11px;
-    font-weight: 900;
-    letter-spacing: .05em;
-    white-space: nowrap;
-    text-shadow: 2px 2px 0 #000;
-  }
-
-  .hud-line {
-    margin-top: 3px;
-    color: var(--muted);
-    font-size: 10px;
-    font-weight: 700;
-    white-space: nowrap;
-  }
-
-  .bar {
-    height: 8px;
-    margin-top: 5px;
-    overflow: hidden;
-    border: 2px solid #17293c;
-    border-radius: 0;
-    background: #101621;
-  }
-
-  .bar i {
-    display: block;
-    width: 100%;
-    height: 100%;
-    transform-origin: left;
-    background: #57df6c;
-  }
-
-  #progressTrack {
-    position: absolute;
-    left: 50%;
-    top: max(8px, env(safe-area-inset-top));
-    transform: translateX(-50%);
-    width: min(32vw, 400px);
-    height: 12px;
-    padding: 2px;
-    border: 3px solid #6f8fa8;
-    border-radius: 0;
-    background: #07101d;
-    box-shadow: 3px 3px 0 #02040a;
-  }
-
-  #progressTrack i {
-    display: block;
-    height: 100%;
-    width: 0;
-    border-radius: 0;
-    background: repeating-linear-gradient(90deg,#4ce8ff 0 8px,#ffd34d 8px 16px,#ff5747 16px 24px);
-  }
-
-  #phaseLabel {
-    position: absolute;
-    left: 50%;
-    top: max(24px, calc(env(safe-area-inset-top) + 18px));
-    transform: translateX(-50%);
-    max-width: 42vw;
-    overflow: hidden;
-    color: #c9e9ef;
-    font-size: 9px;
-    font-weight: 900;
-    letter-spacing: .12em;
-    text-align: center;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    text-shadow: 2px 2px 0 #000;
-  }
-
-  #pauseBtn {
-    position: absolute;
-    top: max(42px, calc(env(safe-area-inset-top) + 36px));
-    left: 50%;
-    transform: translateX(-50%);
-    width: 42px;
-    height: 34px;
-    min-height: 0;
-    padding: 0;
-    border-radius: 0;
-    pointer-events: auto;
-    display: none;
-    color: #fff;
-    border: 3px solid #6f8fa8;
-    background: #07101d;
-    box-shadow: 3px 3px 0 #02040a;
-    font-family: inherit;
-    font-weight: 900;
-  }
-
-  #bossHud {
-    position: absolute;
-    top: max(78px, calc(env(safe-area-inset-top) + 71px));
-    left: 50%;
-    transform: translateX(-50%);
-    width: min(600px,72vw);
-    display: none;
-    text-align: center;
-  }
-
-  #bossName {
-    font-size: 12px;
-    color: var(--gold);
-    font-weight: 900;
-    letter-spacing: .12em;
-    text-shadow: 3px 3px 0 #000;
-  }
-
-  #bossBar {
-    height: 14px;
-    margin-top: 4px;
-    border: 3px solid #f4f1d0;
-    border-radius: 0;
-    overflow: hidden;
-    background: #18080c;
-    box-shadow: 3px 3px 0 #000;
-  }
-
-  #bossBar i {
-    display: block;
-    width: 100%;
-    height: 100%;
-    transform-origin: left;
-    background: repeating-linear-gradient(90deg,#ffd34d 0 10px,#ff6f3d 10px 20px,#df2439 20px 30px);
-  }
-
-  #banner {
-    position: absolute;
-    left: 50%;
-    top: 25%;
-    transform: translate(-50%,-50%);
-    opacity: 0;
-    max-width: 92%;
-    padding: 4px 8px;
-    font-size: clamp(20px,5vw,52px);
-    font-weight: 900;
-    letter-spacing: .06em;
-    text-align: center;
-    white-space: nowrap;
-    color: #fff4a0;
-    background: rgba(0,0,0,.34);
-    text-shadow: 4px 4px 0 #000;
-    transition: opacity .08s steps(2, end);
-  }
-
-  #menu {
-    position: absolute;
-    inset: 0;
-    z-index: 20;
-    display: grid;
-    place-items: center;
-    overflow: auto;
-    padding: max(16px,env(safe-area-inset-top)) 14px max(16px,env(safe-area-inset-bottom));
-    background:
-      linear-gradient(90deg, transparent 0 47%, rgba(76,232,255,.05) 48% 52%, transparent 53%),
-      repeating-linear-gradient(0deg,#030712 0 22px,#06101d 22px 44px);
-    touch-action: pan-y;
-  }
-
-  .panel {
-    width: min(590px,95vw);
-    padding: 20px;
-    border: 4px solid #6f8fa8;
-    border-radius: 0;
-    background: var(--panel);
-    box-shadow: 10px 10px 0 #02040a;
-    text-align: center;
-  }
-
-  h1 {
-    margin: 0;
-    font-size: clamp(34px,7vw,68px);
-    line-height: .92;
-    letter-spacing: -.05em;
-    text-transform: uppercase;
-    text-shadow: 5px 5px 0 #000;
-  }
-
-  h1 span { color: var(--hot); }
-
-  .coin-prompt {
-    margin-top: 8px;
-    color: var(--gold);
-    font-size: 11px;
-    font-weight: 900;
-    letter-spacing: .16em;
-    text-shadow: 2px 2px 0 #000;
-    animation: arcadeBlink .9s steps(2, end) infinite;
-  }
-
-  @keyframes arcadeBlink {
-    0%, 49% { opacity: 1; }
-    50%, 100% { opacity: .28; }
-  }
-
-  .subtitle {
-    margin: 13px auto 18px;
-    max-width: 510px;
-    color: var(--muted);
-    font-size: 12px;
-    font-weight: 700;
-    line-height: 1.5;
-  }
-
-  .mission-card {
-    margin: 0 0 14px;
-    padding: 10px 11px;
-    text-align: left;
-    border: 3px solid #23384e;
-    border-radius: 0;
-    background: #0b1422;
-  }
-
-  .mission-card b {
-    color: #fff4a0;
-    font-size: 12px;
-    letter-spacing: .06em;
-  }
-
-  .mission-card p {
-    margin: 5px 0 0;
-    color: #b7c2d1;
-    font-size: 10px;
-    line-height: 1.5;
-  }
-
-  .button-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-  }
-
-  button, select {
-    appearance: none;
-    border: 3px solid #6f8fa8;
-    color: #fff;
-    background: #111a2a;
-    font-family: inherit;
-  }
-
-  button {
-    min-height: 44px;
-    border-radius: 0;
-    font-weight: 900;
-    letter-spacing: .04em;
-    box-shadow: 4px 4px 0 #02040a;
-  }
-
-  button:active {
-    transform: translate(3px,3px);
-    box-shadow: 1px 1px 0 #02040a;
-  }
-
-  button:focus-visible, select:focus-visible {
-    outline: 3px solid var(--gold);
-    outline-offset: 3px;
-  }
-
-  button.primary { background: #c92f35; }
-
-  select {
-    width: 100%;
-    margin-top: 10px;
-    padding: 11px;
-    border-radius: 0;
-    box-shadow: 4px 4px 0 #02040a;
-  }
-
-  .help {
-    margin-top: 12px;
-    color: #98a6b9;
-    font-size: 10px;
-    line-height: 1.45;
-  }
-
-  #touchDock {
-    display: none;
-    min-height: 0;
-    position: relative;
-    z-index: 30;
-    overflow: hidden;
-    border-top: 4px solid #24364d;
-    background: repeating-linear-gradient(90deg,#080d17 0 18px,#0c1422 18px 36px);
-    padding:
-      7px max(10px,env(safe-area-inset-right))
-      max(7px,env(safe-area-inset-bottom))
-      max(10px,env(safe-area-inset-left));
-  }
-
-  #shell.touch-active #touchDock {
-    display: grid;
-    grid-template-columns: 42% 58%;
-    align-items: center;
-  }
-
-  #moveZone, #actionZone {
-    position: relative;
-    height: 100%;
-    min-height: 0;
     touch-action: none;
-  }
-
-  #actionZone {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: clamp(12px, 2.6vw, 24px);
-    padding: 0 6px;
-  }
-
-  #joystickBase {
-    position: absolute;
-    left: clamp(8px,5vw,46px);
-    top: 50%;
-    transform: translateY(-50%);
-    width: var(--stick);
-    height: var(--stick);
-    border-radius: 50%;
-    border: 4px solid #53667e;
-    background: #101827;
-    box-shadow: inset 0 0 0 6px #070b13, 5px 5px 0 #02040a;
-  }
-
-  #joystickKnob {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    width: 43%;
-    height: 43%;
-    margin: -21.5%;
-    border-radius: 50%;
-    border: 4px solid #8797aa;
-    background: #32445e;
-    box-shadow: 4px 4px 0 #02040a;
-    transform: translate(0,0);
-  }
-
-  #joystickAim {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    width: 47%;
-    height: 5px;
-    transform-origin: left center;
-    background: #4ce8ff;
-    transform: translateY(-50%) scaleX(.15);
-  }
-
-  #joystickArrow {
-    position: absolute;
-    right: -8px;
-    top: 50%;
-    width: 0;
-    height: 0;
-    transform: translateY(-50%);
-    border-top: 7px solid transparent;
-    border-bottom: 7px solid transparent;
-    border-left: 11px solid var(--cyan);
-  }
-
-  .action {
-    position: relative;
-    flex: 0 0 var(--btn);
-    border-radius: 50%;
-    padding: 0;
-    min-height: 0;
-    width: var(--btn);
-    height: var(--btn);
-    font-size: clamp(19px,4vw,29px);
-    border-width: 4px;
-    box-shadow: 5px 6px 0 #02040a;
-    touch-action: none;
-  }
-
-  .action small {
-    display: block;
-    font-size: 8px;
-    opacity: .9;
-    letter-spacing: .04em;
-  }
-
-  #powerBtn {
-    transform: translateY(11px) rotate(-9deg);
-    background: #c88824;
-  }
-
-  #fireBtn {
-    transform: translateY(1px);
-    background: #c92f35;
-  }
-
-  #jumpBtn {
-    transform: translateY(-10px) rotate(9deg);
-    background: #2c6fae;
-  }
-
-  #powerBtn:active { transform: translate(3px,14px) rotate(-9deg); }
-  #fireBtn:active { transform: translate(3px,4px); }
-  #jumpBtn:active { transform: translate(3px,-7px) rotate(9deg); }
-
-  .action.is-held {
-    filter: brightness(1.35);
-    box-shadow: 2px 2px 0 #02040a;
-  }
-
-  #version {
-    position: absolute;
-    right: 7px;
-    bottom: 4px;
-    color: rgba(255,255,255,.48);
-    font-size: 9px;
-    font-weight: 700;
-    pointer-events: none;
-    z-index: 40;
-    text-shadow: 2px 2px 0 #000;
-  }
-
-  @media (orientation: portrait) {
-    :root {
-      --stick: min(130px,33vw);
-      --btn: min(62px,15.5vw);
-    }
-    #progressTrack, #phaseLabel { display: none; }
-    #pauseBtn {
-      top: max(9px, env(safe-area-inset-top));
-      left: auto;
-      right: 9px;
-      transform: none;
-    }
-    #bossHud { top: max(76px, calc(env(safe-area-inset-top) + 68px)); width: 90vw; }
-    #actionZone { gap: clamp(9px, 2.4vw, 16px); }
-  }
-
-  @media (orientation: landscape) {
-    :root {
-      --stick: min(108px,28vh);
-      --btn: min(62px,17vh);
-    }
-    #shell.touch-active #touchDock { grid-template-columns: 48% 52%; }
-    #joystickBase { left: clamp(12px,7vw,70px); }
-    #actionZone { gap: clamp(13px,2vw,28px); }
-  }
-
-  @media (max-height: 560px) {
-    #banner { top: 27%; font-size: clamp(18px, 4vw, 36px); }
-    .panel { padding: 14px 17px; }
-    .subtitle { margin: 8px auto 10px; }
-    .mission-card { margin-bottom: 9px; padding: 8px 10px; }
-    .help { margin-top: 7px; }
-  }
-
-  @media (max-width: 430px) {
-    .panel { padding: 16px 14px; }
-    .button-row { grid-template-columns: 1fr; }
-    .hud-card { min-width: 132px; max-width: 47%; padding: 5px 6px; }
-    .hud-title { font-size: 10px; }
-    .hud-line { font-size: 9px; }
-    #phaseLabel { max-width: 34vw; font-size: 8px; }
   }
 </style>
 </head>
 <body>
-<div id="shell">
-  <div id="playfield">
-    <canvas id="game"></canvas>
-
-    <div id="hud">
-      <div class="topbar">
-        <div class="hud-card">
-          <div class="hud-title" id="p1Title">P1 • RIFLE</div>
-          <div class="bar"><i id="p1Health"></i></div>
-          <div class="hud-line" id="p1Info">Lives 3 • Score 000000</div>
-        </div>
-
-        <div id="progressTrack"><i id="progressFill"></i></div>
-        <div id="phaseLabel">ARMORED BREACH</div>
-
-        <div class="hud-card right" id="p2Card" style="display:none">
-          <div class="hud-title" id="p2Title">P2 • RIFLE</div>
-          <div class="bar"><i id="p2Health"></i></div>
-          <div class="hud-line" id="p2Info">Lives 3 • Score 000000</div>
-        </div>
-      </div>
-
-      <button id="pauseBtn" aria-label="Pause">Ⅱ</button>
-
-      <div id="bossHud">
-        <div id="bossName">SIEGE WALKER</div>
-        <div id="bossBar"><i></i></div>
-      </div>
-
-      <div id="banner"></div>
-    </div>
-
-    <div id="menu">
-      <div class="panel">
-        <h1>IRON <span>REIGN</span></h1>
-        <div class="coin-prompt">★ ONE CREDIT ★</div>
-        <div class="subtitle">
-          Six handcrafted arcade worlds with terrain-aware combat, aerial smash attacks, animated pixel-art bosses, persistent weapons, and cinematic victories.
-        </div>
-        <div class="mission-card">
-          <b>LEVELS 1–6: IRON REIGN CAMPAIGN</b>
-          <p>City siege → sky fortress → orbital core → bioforge wildlands → frozen maglev → chrono citadel. Weapons carry across every stage.</p>
-        </div>
-        <div class="button-row">
-          <button class="primary" id="soloBtn">START MISSION</button>
-          <button id="coopBtn">2 PLAYER CO-OP</button>
-        </div>
-        <select id="difficulty">
-          <option value="0.85">Recruit</option>
-          <option value="1" selected>Arcade</option>
-          <option value="1.15">Veteran</option>
-          <option value="1.30">Nightmare</option>
-        </select>
-        <div class="help">
-          Mobile: joystick moves/aims • DOWN ducks • DOWN + C drops through platforms or dive-smashes in air • A calls IRON TEMPEST • B fire • tap C twice to double-jump.<br>
-          Land on enemies to stomp safely. IRON TEMPEST clears enemy fire and strikes every visible enemy. ROCKETS lock onto visible targets. Keyboard P1: A/D, S duck, S+W drop/dive-smash, W double-jump, F fire, G strike.
-        </div>
-      </div>
-    </div>
-
-    <div id="version">v3.4 • SMASH & VICTORY</div>
-  </div>
-
-  <div id="touchDock">
-    <div id="moveZone">
-      <div id="joystickBase">
-        <div id="joystickAim"><div id="joystickArrow"></div></div>
-        <div id="joystickKnob"></div>
-      </div>
-    </div>
-
-    <div id="actionZone">
-      <button class="action" id="powerBtn">A<small>STRIKE</small></button>
-      <button class="action" id="fireBtn">B<small>FIRE</small></button>
-      <button class="action" id="jumpBtn">C<small>JUMP</small></button>
-    </div>
-  </div>
-</div>
-
+<canvas id="game" aria-label="Iron Reign arcade game"></canvas>
 <script>
 (() => {
   "use strict";
 
   const canvas = document.getElementById("game");
   const ctx = canvas.getContext("2d", { alpha: false });
-  const shell = document.getElementById("shell");
-  const menu = document.getElementById("menu");
-  const pauseBtn = document.getElementById("pauseBtn");
-  const banner = document.getElementById("banner");
-  const bossHud = document.getElementById("bossHud");
-  const bossName = document.getElementById("bossName");
-  const bossBar = document.querySelector("#bossBar i");
-  const p1Title = document.getElementById("p1Title");
-  const p1Health = document.getElementById("p1Health");
-  const p1Info = document.getElementById("p1Info");
-  const p2Card = document.getElementById("p2Card");
-  const p2Title = document.getElementById("p2Title");
-  const p2Health = document.getElementById("p2Health");
-  const p2Info = document.getElementById("p2Info");
-  const progressFill = document.getElementById("progressFill");
-  const phaseLabel = document.getElementById("phaseLabel");
-  const subtitle = document.querySelector(".subtitle");
-  const soloBtn = document.getElementById("soloBtn");
-  const coopBtn = document.getElementById("coopBtn");
+  const UI_FONT = '"Trebuchet MS", Arial, sans-serif';
   const DEFAULT_SUBTITLE = "Six handcrafted arcade worlds with terrain-aware combat, aerial smash attacks, animated pixel-art bosses, persistent weapons, and cinematic victories.";
-  const moveZone = document.getElementById("moveZone");
-  const joystickBase = document.getElementById("joystickBase");
-  const joystickKnob = document.getElementById("joystickKnob");
-  const joystickAim = document.getElementById("joystickAim");
+  const DIFFICULTY_OPTIONS = [
+    { label: "RECRUIT", value: 0.85 },
+    { label: "ARCADE", value: 1 },
+    { label: "VETERAN", value: 1.15 },
+    { label: "NIGHTMARE", value: 1.30 }
+  ];
+  const MUSIC_THEMES = [
+    { name: "URBAN UPRISING", bpm: 152, root: 45, wave: "square", lead: [0,3,7,10,7,3,12,10, 0,3,7,15,12,10,7,3], bass: [0,0,5,3,0,0,7,5], arp: [0,7,12,15,12,7,3,10] },
+    { name: "NEON OVERDRIVE", bpm: 166, root: 48, wave: "sawtooth", lead: [0,7,12,15,19,15,12,7, 3,10,15,22,19,15,10,7], bass: [0,5,3,7,0,8,7,5], arp: [0,12,7,15,3,15,10,19] },
+    { name: "ZERO-G REBELLION", bpm: 136, root: 43, wave: "triangle", lead: [0,null,7,10,12,null,10,7, 3,null,10,15,14,null,10,7], bass: [0,0,3,5,0,-2,3,7], arp: [0,7,14,10,3,10,15,7] },
+    { name: "BIOFORGE RAMPAGE", bpm: 158, root: 41, wave: "square", lead: [0,3,5,10,8,5,3,12, 0,5,8,15,12,10,8,5], bass: [0,0,5,3,8,5,3,-2], arp: [0,5,10,15,3,8,12,17] },
+    { name: "FROZEN VELOCITY", bpm: 172, root: 50, wave: "triangle", lead: [0,4,7,12,16,12,19,16, 0,7,11,14,19,14,11,7], bass: [0,7,5,9,0,11,9,7], arp: [0,12,7,19,4,16,11,23] },
+    { name: "CHRONO LAST STAND", bpm: 178, root: 40, wave: "sawtooth", lead: [0,3,7,12,15,19,15,12, 10,7,3,0,12,15,22,19], bass: [0,0,3,7,8,7,5,3], arp: [0,7,12,15,3,10,15,19] }
+  ];
+
+  let menuLevel = 0;
+  let menuDifficulty = 1;
+  let menuFocus = 0;
+  let menuResult = "";
+  let bannerText = "";
+  let bannerUntil = 0;
+  const hudState = { progress: 0, phase: "CITY ASSAULT" };
+  const uiRects = { menu: {}, pause: null, mute: null, fullscreen: null, stick: null, buttons: {} };
+  const MENU_FOCUS_COUNT = 6;
+  const pointerActions = new Map();
 
   const LEVEL_W = 54400;
   const WORLD_H = 900;
@@ -702,6 +83,16 @@
     { start: 27200, end: 36000, title: "LEVEL 4 • BIOFORGE WILDLANDS", short: "BIOFORGE" },
     { start: 36000, end: 44800, title: "LEVEL 5 • FROZEN MAGLEV", short: "FROZEN MAGLEV" },
     { start: 44800, end: LEVEL_W, title: "LEVEL 6 • CHRONO CITADEL", short: "CHRONO CITADEL" }
+  ];
+
+  const DIRECT_START_LOADOUTS = [0, 1, 2, 3, 2, 3];
+  const LEVEL_MENU_DESCRIPTIONS = [
+    "Begin the complete six-level campaign with the armored breach. Weapons carry forward as you advance.",
+    "Start at the neon fortress with a Spread weapon, full health, and the standard Strike stock.",
+    "Enter the low-gravity orbital core with a Rapid weapon and skip the earlier city campaign.",
+    "Begin in the Bioforge with homing Rockets and immediate access to its organic routes and launch pods.",
+    "Start on the Frozen Maglev with a Rapid weapon and take on moving platforms, ravines, and ice machinery.",
+    "Jump directly to the Chrono Citadel with homing Rockets, time gates, shifting bridges, and the final bosses."
   ];
 
   const BOSS_PROFILES = {
@@ -800,7 +191,9 @@
     moveX: 0,
     aimX: 1,
     aimY: 0,
-    duck: false
+    down: false,
+    knobX: 0,
+    knobY: 0
   };
 
   let dpr = 1;
@@ -813,6 +206,10 @@
   let cameraTargetY = 0;
   let cameraHoldX = null;
   let portrait = false;
+  let safeTop = 0;
+  let safeRight = 0;
+  let safeBottom = 0;
+  let safeLeft = 0;
 
   let last = performance.now();
   let accumulator = 0;
@@ -825,6 +222,7 @@
 
   let levelState = "menu";
   let introVehicle = null;
+  let stageIntro = null;
   let crashTimer = 0;
   let checkpointX = 1100;
   let finalWinTimer = 0;
@@ -847,6 +245,7 @@
   let portals = [];
   let chronoPulse = 0;
   let chronoPulseClock = 0;
+  let portalWarp = null;
   let terrain = [];
   let decorations = [];
   let stars = [];
@@ -1006,41 +405,39 @@
     const viewport = window.visualViewport;
     const vw = Math.max(1, Math.round(viewport ? viewport.width : innerWidth));
     const vh = Math.max(1, Math.round(viewport ? viewport.height : innerHeight));
-
+    const offsetX = Math.round(viewport ? viewport.offsetLeft : 0);
+    const offsetY = Math.round(viewport ? viewport.offsetTop : 0);
     portrait = vh >= vw;
 
-    const controlsHeight = isTouch
-      ? portrait
-        ? clamp(Math.round(vh * 0.29), 180, 235)
-        : clamp(Math.round(vh * 0.27), 104, 132)
-      : 0;
+    // Render at the device's real pixel density. UI dimensions are calculated in
+    // physical CSS pixels, so increasing resolution improves clarity without
+    // making controls larger or changing gameplay scale.
+    dpr = isTouch ? 1 : clamp(window.devicePixelRatio || 1, 1, 1.35);
+    canvas.style.left = offsetX + "px";
+    canvas.style.top = offsetY + "px";
+    canvas.style.width = vw + "px";
+    canvas.style.height = vh + "px";
+    canvas.width = Math.max(1, Math.round(vw * dpr));
+    canvas.height = Math.max(1, Math.round(vh * dpr));
 
-    document.documentElement.style.setProperty("--app-h", vh + "px");
-    document.documentElement.style.setProperty("--controls-h", controlsHeight + "px");
-    shell.style.width = vw + "px";
-    shell.style.height = vh + "px";
+    const rootStyle = getComputedStyle(document.documentElement);
+    safeTop = (parseFloat(rootStyle.getPropertyValue("--safe-top")) || 0) * dpr;
+    safeRight = (parseFloat(rootStyle.getPropertyValue("--safe-right")) || 0) * dpr;
+    safeBottom = (parseFloat(rootStyle.getPropertyValue("--safe-bottom")) || 0) * dpr;
+    safeLeft = (parseFloat(rootStyle.getPropertyValue("--safe-left")) || 0) * dpr;
+    ctx.imageSmoothingEnabled = true;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
 
-    const rect = canvas.getBoundingClientRect();
-    // Render to a deliberately low-resolution buffer and let CSS enlarge it.
-    // This creates real chunky pixels instead of a modern smooth canvas filter.
-    const targetWidth = clamp(
-      Math.round(rect.width * (isTouch ? 0.56 : 0.64)),
-      320,
-      680
-    );
-    dpr = targetWidth / Math.max(1, rect.width);
-    canvas.width = Math.max(320, targetWidth);
-    canvas.height = Math.max(180, Math.round(rect.height * dpr));
-    ctx.imageSmoothingEnabled = false;
-
-    visibleWorldW = portrait ? 900 : (vw / vh > 2 ? 1850 : 1700);
+    const aspect = vw / vh;
+    visibleWorldW = portrait ? 820 : (aspect > 2.4 ? 1620 : 1500);
     viewScale = canvas.width / visibleWorldW;
     visibleWorldH = canvas.height / viewScale;
 
     const maxCameraX = Math.max(0, LEVEL_W - visibleWorldW);
     cameraX = clamp(cameraX, 0, maxCameraX);
     cameraTargetX = clamp(cameraTargetX, 0, maxCameraX);
-    const baselineY = terrainSurfaceY(cameraX + visibleWorldW * 0.36) - visibleWorldH * (portrait ? 0.72 : 0.82);
+    const baselineY = terrainSurfaceY(cameraX + visibleWorldW * 0.36) - visibleWorldH * (portrait ? 0.70 : 0.80);
     if (!running || levelState === "menu") cameraY = baselineY;
     cameraTargetY = baselineY;
   }
@@ -1057,11 +454,55 @@
     visualViewport.addEventListener("scroll", resize, { passive: true });
   }
 
+  function fullscreenActive() {
+    return Boolean(document.fullscreenElement || document.webkitFullscreenElement);
+  }
+
+  async function toggleFullscreen() {
+    try {
+      if (fullscreenActive()) {
+        const exit = document.exitFullscreen || document.webkitExitFullscreen;
+        if (exit) await exit.call(document);
+      } else {
+        const target = document.documentElement;
+        const request = target.requestFullscreen || target.webkitRequestFullscreen;
+        if (!request) {
+          menuResult = "FULLSCREEN IS NOT SUPPORTED BY THIS BROWSER";
+          return;
+        }
+        try {
+          await request.call(target, { navigationUI: "hide" });
+        } catch (_) {
+          await request.call(target);
+        }
+      }
+    } catch (_) {
+      menuResult = "FULLSCREEN REQUEST WAS BLOCKED";
+    }
+    clearControls();
+    setTimeout(resize, 40);
+    setTimeout(resize, 220);
+  }
+
+  document.addEventListener("fullscreenchange", resize, { passive: true });
+  document.addEventListener("webkitfullscreenchange", resize, { passive: true });
+
   class Sound {
     constructor() {
       this.ctx = null;
       this.master = null;
+      this.sfxGain = null;
+      this.musicGain = null;
+      this.musicVolume = 0.52;
+      this.sfxVolume = 0.70;
       this.noiseBuffer = null;
+      this.musicTimer = null;
+      this.musicLevel = -1;
+      this.musicStep = 0;
+      this.musicNextTime = 0;
+      this.musicMuted = false;
+      this.musicPaused = false;
+      this.lastImpactAt = -1;
     }
 
     ensure() {
@@ -1074,8 +515,14 @@
       if (!AudioContextClass) return;
       this.ctx = new AudioContextClass();
       this.master = this.ctx.createGain();
-      this.master.gain.value = 0.16;
+      this.master.gain.value = 0.20;
       this.master.connect(this.ctx.destination);
+      this.sfxGain = this.ctx.createGain();
+      this.sfxGain.gain.value = this.sfxVolume;
+      this.sfxGain.connect(this.master);
+      this.musicGain = this.ctx.createGain();
+      this.musicGain.gain.value = this.musicVolume;
+      this.musicGain.connect(this.master);
     }
 
     toneAt(frequency, duration, type = "square", gain = 0.18, slide = 0, delay = 0) {
@@ -1095,7 +542,7 @@
       amplifier.gain.setValueAtTime(Math.max(0.001, gain), start);
       amplifier.gain.exponentialRampToValueAtTime(0.001, start + duration);
       oscillator.connect(amplifier);
-      amplifier.connect(this.master);
+      amplifier.connect(this.sfxGain || this.master);
       oscillator.start(start);
       oscillator.stop(start + duration + 0.02);
     }
@@ -1123,7 +570,7 @@
       source.buffer = this.noiseBuffer;
       source.connect(filter);
       filter.connect(amplifier);
-      amplifier.connect(this.master);
+      amplifier.connect(this.sfxGain || this.master);
       source.start(start);
       source.stop(start + duration + 0.02);
     }
@@ -1168,6 +615,27 @@
       this.noiseAt(0.16 * s, 0.24 * s, "lowpass", 980 / s);
       this.noiseAt(0.075, 0.10 * s, "highpass", 1700, 0.018);
       this.toneAt(86 / s, 0.22 * s, "square", 0.13 * s, -48);
+    }
+
+    impact(strength = 1, material = "metal") {
+      this.ensure();
+      if (!this.ctx) return;
+      const now = this.ctx.currentTime;
+      if (now - this.lastImpactAt < 0.045) return;
+      this.lastImpactAt = now;
+      const s = clamp(strength, 0.55, 2.2);
+      const metallic = material === "metal";
+      this.noiseAt(0.07 + 0.055 * s, 0.10 + 0.07 * s, metallic ? "bandpass" : "lowpass", metallic ? 1050 : 520);
+      this.toneAt((metallic ? 92 : 66) / Math.sqrt(s), 0.12 + 0.08 * s, metallic ? "square" : "triangle", 0.08 + 0.045 * s, -38);
+      if (s > 1.15) this.noiseAt(0.18, 0.10 * s, "lowpass", 360, 0.035);
+    }
+
+    crash(strength = 1.4) {
+      const s = clamp(strength, 0.8, 2.4);
+      this.impact(s, "metal");
+      this.noiseAt(0.34 * s, 0.20 * s, "lowpass", 430 / Math.sqrt(s), 0.02);
+      this.noiseAt(0.11, 0.12 * s, "highpass", 2200, 0.045);
+      this.toneAt(54 / Math.sqrt(s), 0.42 * s, "sawtooth", 0.14 * s, -28, 0.015);
     }
 
     bigExplosion(scale = 1.35) {
@@ -1228,6 +696,138 @@
       const root = roots[level] || 110;
       const pattern = level === 3 ? [1, 1.25, 1.5, 2] : level === 4 ? [1, 1.5, 1.25, 2] : [1, 1.25, 1.5, 2];
       pattern.forEach((ratio, i) => this.toneAt(root * ratio, 0.12, "square", 0.075, 35, i * 0.09));
+    }
+
+    midiFrequency(note) {
+      return 440 * Math.pow(2, (note - 69) / 12);
+    }
+
+    musicTone(note, duration, wave, gain, start, detune = 0) {
+      if (!this.ctx || !this.musicGain || note == null) return;
+      const oscillator = this.ctx.createOscillator();
+      const amplifier = this.ctx.createGain();
+      oscillator.type = wave;
+      oscillator.frequency.setValueAtTime(this.midiFrequency(note), start);
+      oscillator.detune.value = detune;
+      amplifier.gain.setValueAtTime(0.0001, start);
+      amplifier.gain.exponentialRampToValueAtTime(Math.max(0.001, gain), start + 0.008);
+      amplifier.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+      oscillator.connect(amplifier);
+      amplifier.connect(this.musicGain);
+      oscillator.start(start);
+      oscillator.stop(start + duration + 0.025);
+    }
+
+    musicNoise(duration, gain, frequency, start) {
+      if (!this.ctx || !this.musicGain) return;
+      if (!this.noiseBuffer) {
+        this.noiseBuffer = this.ctx.createBuffer(1, Math.floor(this.ctx.sampleRate * 0.65), this.ctx.sampleRate);
+        const data = this.noiseBuffer.getChannelData(0);
+        for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+      }
+      const source = this.ctx.createBufferSource();
+      const filter = this.ctx.createBiquadFilter();
+      const amplifier = this.ctx.createGain();
+      source.buffer = this.noiseBuffer;
+      filter.type = "bandpass";
+      filter.frequency.value = frequency;
+      amplifier.gain.setValueAtTime(Math.max(0.001, gain), start);
+      amplifier.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+      source.connect(filter);
+      filter.connect(amplifier);
+      amplifier.connect(this.musicGain);
+      source.start(start);
+      source.stop(start + duration + 0.02);
+    }
+
+    scheduleMusicStep(start) {
+      const theme = MUSIC_THEMES[this.musicLevel];
+      if (!theme || this.musicMuted || this.musicPaused) return;
+      const step = this.musicStep;
+      const beat = 60 / theme.bpm;
+      const sixteenth = beat / 4;
+      const leadOffset = theme.lead[step % theme.lead.length];
+      const bassOffset = theme.bass[Math.floor(step / 4) % theme.bass.length];
+      const arpOffset = theme.arp[step % theme.arp.length];
+      const bossBoost = activeBoss && !activeBoss.dead;
+
+      if (step % 2 === 0 && leadOffset != null) {
+        this.musicTone(theme.root + 12 + leadOffset, sixteenth * 1.72, theme.wave, bossBoost ? 0.050 : 0.040, start);
+      }
+      this.musicTone(theme.root + 12 + arpOffset, sixteenth * 0.86, step % 3 ? "square" : "triangle", bossBoost ? 0.026 : 0.020, start, step % 2 ? -5 : 5);
+      if (step % 4 === 0) {
+        this.musicTone(theme.root - 12 + bassOffset, beat * 0.82, "square", bossBoost ? 0.070 : 0.055, start);
+      }
+
+      if (step % 8 === 0) {
+        this.musicTone(theme.root - 24, 0.11, "sine", bossBoost ? 0.090 : 0.072, start, 0);
+        this.musicNoise(0.045, 0.028, 170, start);
+      }
+      if (step % 8 === 4) this.musicNoise(0.10, bossBoost ? 0.060 : 0.047, 1150, start);
+      if (step % 2 === 1) this.musicNoise(0.024, bossBoost ? 0.020 : 0.014, this.musicLevel === 4 ? 4200 : 3100, start);
+      if (bossBoost && step % 8 === 6) this.musicTone(theme.root + 24 + (leadOffset || 0), sixteenth * 1.3, "square", 0.034, start);
+
+      this.musicStep = (step + 1) % 64;
+    }
+
+    pumpMusic() {
+      if (!this.ctx || this.musicLevel < 0 || this.musicPaused) return;
+      const theme = MUSIC_THEMES[this.musicLevel];
+      const stepDuration = 60 / theme.bpm / 4;
+      const horizon = this.ctx.currentTime + 0.16;
+      if (this.musicNextTime < this.ctx.currentTime - 0.25) this.musicNextTime = this.ctx.currentTime + 0.04;
+      while (this.musicNextTime < horizon) {
+        this.scheduleMusicStep(this.musicNextTime);
+        this.musicNextTime += stepDuration;
+      }
+    }
+
+    startMusic(level) {
+      this.ensure();
+      if (!this.ctx) return;
+      const nextLevel = clamp(level | 0, 0, MUSIC_THEMES.length - 1);
+      if (this.musicLevel !== nextLevel) {
+        this.musicLevel = nextLevel;
+        this.musicStep = 0;
+        this.musicNextTime = this.ctx.currentTime + 0.06;
+      }
+      this.musicPaused = false;
+      if (this.musicGain) {
+        const now = this.ctx.currentTime;
+        this.musicGain.gain.cancelScheduledValues(now);
+        this.musicGain.gain.setTargetAtTime(this.musicMuted ? 0.0001 : this.musicVolume, now, 0.035);
+      }
+      if (!this.musicTimer) this.musicTimer = setInterval(() => this.pumpMusic(), 35);
+    }
+
+    stopMusic() {
+      this.musicLevel = -1;
+      this.musicStep = 0;
+      if (this.musicGain && this.ctx) this.musicGain.gain.setTargetAtTime(0.0001, this.ctx.currentTime, 0.04);
+      if (this.musicTimer) {
+        clearInterval(this.musicTimer);
+        this.musicTimer = null;
+      }
+    }
+
+    setMusicPaused(value) {
+      this.musicPaused = Boolean(value);
+      if (!this.ctx || !this.musicGain) return;
+      const now = this.ctx.currentTime;
+      this.musicGain.gain.cancelScheduledValues(now);
+      this.musicGain.gain.setTargetAtTime(this.musicPaused || this.musicMuted ? 0.0001 : this.musicVolume, now, 0.03);
+      if (!this.musicPaused) this.musicNextTime = now + 0.05;
+    }
+
+    toggleMusic() {
+      this.ensure();
+      this.musicMuted = !this.musicMuted;
+      if (this.musicGain && this.ctx) {
+        const now = this.ctx.currentTime;
+        this.musicGain.gain.cancelScheduledValues(now);
+        this.musicGain.gain.setTargetAtTime(this.musicMuted || this.musicPaused ? 0.0001 : this.musicVolume, now, 0.03);
+      }
+      return !this.musicMuted;
     }
   }
 
@@ -1299,33 +899,57 @@
       this.stompChain = 0;
       this.stompChainTimer = 0;
       this.victoryPose = 0;
+      this.portalCooldown = 0;
+      this.portalContact = false;
+      this.portalDownHeld = false;
+      this.portalHidden = 0;
+      this.spinShotPhase = 0;
     }
 
     controls() {
       if (this.index === 0) {
         const useTouch = isTouch && touchStick.active;
+        const keyboardMove = (pressed("KeyD") ? 1 : 0) - (pressed("KeyA") ? 1 : 0);
+        const down = useTouch ? touchStick.down : pressed("KeyS");
+        const airDown = down && !this.onGround;
+        let aimX = useTouch ? touchStick.aimX : this.facing;
+        let aimY = useTouch ? touchStick.aimY : 0;
+
+        if (airDown) {
+          if (!useTouch) aimX = keyboardMove;
+          aimY = useTouch ? Math.max(0.35, touchStick.aimY) : 1;
+        } else if (down && this.onGround) {
+          aimX = useTouch && Math.abs(touchStick.aimX) > 0.18
+            ? Math.sign(touchStick.aimX)
+            : this.facing;
+          aimY = 0;
+        }
+
         return {
-          moveX: useTouch
-            ? touchStick.moveX
-            : (pressed("KeyD") ? 1 : 0) - (pressed("KeyA") ? 1 : 0),
-          aimX: useTouch ? touchStick.aimX : this.facing,
-          aimY: useTouch ? touchStick.aimY : 0,
+          moveX: useTouch ? touchStick.moveX : keyboardMove,
+          aimX,
+          aimY,
           jump: pressed("KeyW"),
           jumpPressed: takePress("KeyW"),
-          duck: useTouch ? touchStick.duck : pressed("KeyS"),
+          down,
+          duck: down && this.onGround,
           fire: pressed("KeyF"),
           power: pressed("KeyG"),
           powerPressed: takePress("KeyG")
         };
       }
 
+      const keyboardMove = (pressed("ArrowRight") ? 1 : 0) - (pressed("ArrowLeft") ? 1 : 0);
+      const down = pressed("ArrowDown");
+      const airDown = down && !this.onGround;
       return {
-        moveX: (pressed("ArrowRight") ? 1 : 0) - (pressed("ArrowLeft") ? 1 : 0),
-        aimX: this.facing,
-        aimY: 0,
+        moveX: keyboardMove,
+        aimX: airDown ? keyboardMove : this.facing,
+        aimY: airDown ? 1 : 0,
         jump: pressed("ArrowUp"),
         jumpPressed: takePress("ArrowUp"),
-        duck: pressed("ArrowDown"),
+        down,
+        duck: down && this.onGround,
         fire: pressed("KeyK"),
         power: pressed("KeyL"),
         powerPressed: takePress("KeyL")
@@ -1394,7 +1018,7 @@
       }
 
       if (!controlsLocked && controls.jumpPressed) {
-        if (controls.duck && this.onGround && this.supportPlatform) {
+        if (controls.down && this.onGround && this.supportPlatform) {
           this.setCrouching(false);
           this.dropPlatform = this.supportPlatform;
           this.onGround = false;
@@ -1403,7 +1027,7 @@
           this.y += 12;
           burst(this.cx, this.y + this.h - 2, "#ffd34d", 5, 82);
           audio.tone(155, 0.07, "square", 0.07, -50);
-        } else if (controls.duck && !this.onGround) {
+        } else if (controls.down && !this.onGround) {
           this.beginDiveSmash();
         } else {
           const canGroundJump = this.onGround;
@@ -1600,6 +1224,7 @@
       this.stompChainTimer = Math.max(0, this.stompChainTimer - dt);
       if (this.stompChainTimer <= 0) this.stompChain = 0;
       this.victoryPose = Math.max(0, this.victoryPose - dt);
+      this.portalHidden = Math.max(0, this.portalHidden - dt);
       this.animTime += dt;
     }
 
@@ -1654,10 +1279,17 @@
     }
 
     fire() {
+      const spinningBurst = !this.onGround && this.jumpCount >= 2 && !this.smashing;
+      if (spinningBurst) {
+        this.fireSpinBurst();
+        return;
+      }
+
       const base = Math.atan2(this.aimY, this.aimX);
       const muzzleY = this.crouching ? this.y + 14 : this.y + 34;
-      const originX = this.cx + Math.cos(base) * 58;
-      const originY = muzzleY + Math.sin(base) * 58;
+      const verticalShot = this.aimY > 0.82 && Math.abs(this.aimX) < 0.35;
+      const originX = verticalShot ? this.cx : this.cx + Math.cos(base) * 58;
+      const originY = verticalShot ? this.y + this.h + 8 : muzzleY + Math.sin(base) * 58;
 
       let angles = [0];
       let cooldown = 0.14;
@@ -1699,6 +1331,38 @@
       this.fireCooldown = cooldown;
       this.muzzle = 0.07;
       this.recoil = this.weapon === 3 ? 1.25 : this.weapon === 1 ? 0.9 : 0.55;
+      audio.shoot(this.weapon);
+    }
+
+    fireSpinBurst() {
+      const profile = this.weapon === 1
+        ? { count: 12, speed: 900, damage: 11, cooldown: 0.31, type: "pellet" }
+        : this.weapon === 2
+          ? { count: 10, speed: 1160, damage: 8, cooldown: 0.15, type: "rapid" }
+          : this.weapon === 3
+            ? { count: 6, speed: 650, damage: 46, cooldown: 0.58, type: "rocket" }
+            : { count: 8, speed: 1020, damage: 15, cooldown: 0.23, type: "normal" };
+
+      const phase = this.spinAngle + this.spinShotPhase;
+      const launchRadius = this.weapon === 3 ? 34 : 28;
+      for (let i = 0; i < profile.count; i++) {
+        const angle = phase + i * Math.PI * 2 / profile.count;
+        bullets.push(new Bullet(
+          this.cx + Math.cos(angle) * launchRadius,
+          this.cy + Math.sin(angle) * launchRadius,
+          Math.cos(angle) * profile.speed,
+          Math.sin(angle) * profile.speed,
+          this.index,
+          profile.damage,
+          profile.type
+        ));
+      }
+
+      this.spinShotPhase = (this.spinShotPhase + Math.PI / profile.count) % (Math.PI * 2);
+      this.fireCooldown = profile.cooldown;
+      this.muzzle = 0.08;
+      this.recoil = this.weapon === 3 ? 1.1 : 0.7;
+      burst(this.cx, this.cy, this.weapon === 3 ? "#ffac4a" : this.color, Math.min(18, profile.count), 125);
       audio.shoot(this.weapon);
     }
 
@@ -1786,7 +1450,7 @@
     }
 
     draw() {
-      if (this.dead) return;
+      if (this.dead || this.portalHidden > 0) return;
       if (this.invuln > 0 && Math.floor(this.invuln * 14) % 2 === 0) return;
 
       const aimAngle = this.victoryPose > 0 ? -Math.PI / 2 : Math.atan2(this.aimY, this.aimX);
@@ -2385,7 +2049,7 @@
       ctx.fillRect(-118, -15, 22, 10);
       ctx.fillRect(-128, 5, 32, 10);
       ctx.fillStyle = "#fff36d";
-      ctx.font = "900 14px Courier New";
+      ctx.font = `900 14px ${UI_FONT}`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText("IRON", -18, 3);
@@ -3339,7 +3003,6 @@
         impactFeedback(0.10);
         bossDeaths.push(new BossDeathSequence(this));
         victoryScene = new BossVictoryScene(this);
-        bossHud.style.display = "none";
         activeBoss = null;
 
         if (this.profile.checkpoint) checkpointX = this.profile.checkpoint;
@@ -3360,7 +3023,7 @@
       drawBossForm(this.profile, this.phase, warning);
       ctx.globalAlpha = 1;
       if (this.telegraphLabel) {
-        ctx.font = "900 18px Courier New";
+        ctx.font = `900 18px ${UI_FONT}`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         const labelWidth = ctx.measureText(this.telegraphLabel).width + 18;
@@ -3492,8 +3155,8 @@
       this.medalSpin = 0;
       this.bossScore = boss.score;
       this.bonus = Math.round(boss.score * (this.major ? 0.5 : 0.25));
-      banner.style.opacity = "0";
-      banner.textContent = "";
+      bannerUntil = 0;
+      bannerText = "";
 
       levelState = "victory";
       enemyBullets = [];
@@ -3577,7 +3240,7 @@
       const titleY = height * 0.26;
       const victoryTitle = this.final ? "MISSION COMPLETE" : this.major ? "LEVEL GUARDIAN DOWN" : "BOSS DESTROYED";
       const titleSize = Math.max(20, Math.min(this.major ? 48 : 54, Math.round(width * (this.major ? 0.046 : 0.055))));
-      ctx.font = `900 ${titleSize}px Courier New`;
+      ctx.font = `900 ${titleSize}px ${UI_FONT}`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillStyle = "#090b12";
@@ -3586,7 +3249,7 @@
       ctx.fillText(victoryTitle, width / 2, titleY);
 
       const subSize = Math.max(13, Math.min(25, Math.round(width * 0.025)));
-      ctx.font = `900 ${subSize}px Courier New`;
+      ctx.font = `900 ${subSize}px ${UI_FONT}`;
       ctx.fillStyle = "#f5f7fb";
       ctx.fillText(this.name, width / 2, titleY + titleSize * 0.92);
       ctx.fillStyle = "#fff36d";
@@ -3672,21 +3335,76 @@
 
     update() {
       this.y = terrainSurfaceY(this.cx) - this.h;
-      if (!this.partner) return;
-      for (const player of players) {
-        if (player.dead || (player.portalCooldown || 0) > 0 || !player.overlaps(this)) continue;
-        const down = player.index === 0 ? (touchStick.duck || pressed("KeyS")) : pressed("ArrowDown");
-        if (!down) continue;
-        player.portalCooldown = 1.0;
-        player.x = this.partner.cx - player.w / 2 + (this.partner.x > this.x ? 52 : -52);
-        player.y = terrainSurfaceY(player.x) - player.h - 8;
-        player.vx = 0;
-        player.vy = -120;
-        player.invuln = Math.max(player.invuln, 0.9);
-        burst(this.cx, this.cy, this.color, 18, 190);
-        burst(this.partner.cx, this.partner.cy, this.partner.color, 18, 190);
-        audio.tone(190, 0.20, "sawtooth", 0.11, 420);
-      }
+    }
+
+    canActivate(player) {
+      if (!this.partner || player.dead) return false;
+      const horizontalOverlap = player.x + player.w > this.x + 6 && player.x < this.x + this.w - 6;
+      const feet = player.y + player.h;
+      const floorY = this.y + this.h;
+      const atPortalBase = feet >= floorY - 28 && feet <= floorY + 16;
+      return horizontalOverlap && atPortalBase && player.onGround;
+    }
+
+    transport(player) {
+      if (!this.partner || player.dead) return false;
+
+      const direction = this.partner.cx >= this.cx ? 1 : -1;
+      const exitMargin = 20;
+      const squadOffset = direction * player.index * (player.w + 12);
+      const exitX = (direction > 0
+        ? this.partner.x + this.partner.w + exitMargin
+        : this.partner.x - player.w - exitMargin) + squadOffset;
+      const exitCenterX = exitX + player.w / 2;
+      const exitSurfaceY = terrainSurfaceY(exitCenterX);
+
+      player.x = exitX;
+      player.y = exitSurfaceY - player.h - 7;
+      player.vx = direction * 145;
+      player.vy = -145;
+      player.onGround = false;
+      player.supportPlatform = null;
+      player.dropPlatform = null;
+      player.setCrouching(false);
+      player.smashing = false;
+      player.jumpCount = Math.max(1, player.jumpCount);
+      player.facing = direction;
+      player.aimX = direction;
+      player.aimY = 0;
+      player.portalCooldown = 0.55;
+      player.portalContact = false;
+      player.portalHidden = 0.10;
+      player.entryTimer = Math.max(player.entryTimer, 0.12);
+      player.invuln = Math.max(player.invuln, 1.0);
+
+      enemyBullets = enemyBullets.filter(bullet => {
+        return Math.hypot(bullet.cx - exitCenterX, bullet.cy - (exitSurfaceY - player.h / 2)) > 260;
+      });
+
+      const maxCameraX = Math.max(0, LEVEL_W - visibleWorldW);
+      const nextCameraX = clamp(exitCenterX - visibleWorldW * 0.43, 0, maxCameraX);
+      const nextCameraY = clamp(
+        exitSurfaceY - visibleWorldH * (portrait ? 0.72 : 0.82),
+        -Math.max(260, visibleWorldH - WORLD_H + 210),
+        210
+      );
+      cameraX = nextCameraX;
+      cameraTargetX = nextCameraX;
+      cameraY = nextCameraY;
+      cameraTargetY = nextCameraY;
+
+      portalWarp = {
+        timer: 0.34,
+        duration: 0.34,
+        color: this.partner.color,
+        direction
+      };
+
+      burst(this.cx, this.cy, this.color, 18, 190);
+      burst(this.partner.cx, this.partner.cy, this.partner.color, 22, 220);
+      audio.toneAt(170, 0.22, "sawtooth", 0.12, 520);
+      audio.toneAt(420, 0.16, "square", 0.08, -180, 0.08);
+      return true;
     }
 
     draw() {
@@ -3700,7 +3418,7 @@
         ctx.beginPath(); ctx.ellipse(0, y, 24 - Math.abs(y) * 0.25, 7, 0, 0, Math.PI * 2); ctx.stroke();
       }
       ctx.globalAlpha = 1;
-      ctx.fillStyle = "#fff36d"; ctx.font = "900 13px Courier New"; ctx.textAlign = "center"; ctx.fillText("DOWN", 0, 75);
+      ctx.fillStyle = "#fff36d"; ctx.font = `900 13px ${UI_FONT}`; ctx.textAlign = "center"; ctx.fillText("DOWN", 0, 75);
       ctx.restore();
     }
   }
@@ -3868,7 +3586,7 @@
       }
 
       const label = this.name();
-      ctx.font = "900 16px Courier New";
+      ctx.font = `900 16px ${UI_FONT}`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       const labelWidth = ctx.measureText(label).width + 16;
@@ -3934,7 +3652,7 @@
     draw() {
       const alpha = clamp(this.life / this.maxLife, 0, 1);
       ctx.globalAlpha = alpha;
-      ctx.font = `900 ${this.size}px Courier New`;
+      ctx.font = `900 ${this.size}px ${UI_FONT}`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillStyle = "#02040a";
@@ -3972,6 +3690,7 @@
       for (const player of players) {
         if (!player.dead && !this.hit && this.overlaps(player)) {
           this.hit = true;
+          audio.impact(1.15, "metal");
           player.hit(20);
           this.dead = true;
           burst(this.cx, this.cy, "#77706a", 12, 180);
@@ -3982,6 +3701,7 @@
       const groundY = terrainSurfaceY(this.cx);
       if (this.y + this.h >= groundY) {
         this.dead = true;
+        audio.impact(clamp(this.w / 30, 0.8, 1.7), "stone");
         burst(this.cx, groundY - 6, "#77706a", 10, 145);
       }
     }
@@ -4083,7 +3803,7 @@
       ctx.fill();
       ctx.stroke();
       ctx.fillStyle = "#fff36d";
-      ctx.font = "900 24px Courier New";
+      ctx.font = `900 24px ${UI_FONT}`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(label, 0, 5);
@@ -4248,6 +3968,7 @@
         if (this.collapseTimer <= 0) {
           this.dead = true;
           this.respawnTimer = 3.8;
+          audio.crash(clamp(this.w / 150, 0.9, 1.8));
           burst(this.x + this.w / 2, this.y, "#77706a", 18, 180);
         }
       } else if (this.dead) {
@@ -4646,13 +4367,145 @@
     [53600, () => startBoss("reignEmperor", 54120)]
   ];
 
+  function updateLevelSelectionPreview() {
+    menuLevel = clamp(menuLevel | 0, 0, WORLD_ZONES.length - 1);
+    menuDifficulty = clamp(menuDifficulty | 0, 0, DIFFICULTY_OPTIONS.length - 1);
+  }
+
+  function prepareDirectLevelStart(index, startX) {
+    const zone = WORLD_ZONES[index];
+    const loadout = DIRECT_START_LOADOUTS[index];
+    campaignLevel = index;
+    checkpointX = startX;
+    levelState = "onfoot";
+    introVehicle = null;
+
+    for (let i = 0; i < scripts.length; i++) {
+      if (scripts[i][0] <= zone.start) triggered.add(i);
+    }
+
+    const keepFrom = zone.start - 220;
+    enemies = enemies.filter(entity => entity.x + entity.w >= keepFrom);
+    pickups = pickups.filter(entity => entity.x + entity.w >= keepFrom);
+    hazards = hazards.filter(entity => entity.x + entity.w >= keepFrom);
+    platforms = platforms.filter(entity => entity.x + entity.w >= keepFrom);
+    launchPads = launchPads.filter(entity => entity.x + entity.w >= keepFrom);
+    portals = portals.filter(entity => entity.x + entity.w >= keepFrom);
+
+    for (let i = 0; i < players.length; i++) {
+      const player = players[i];
+      player.x = startX + i * 62;
+      player.y = terrainSurfaceY(player.x) - player.h;
+      player.vx = 0;
+      player.vy = 0;
+      player.onGround = true;
+      player.jumpCount = 0;
+      player.entryTimer = 0;
+      player.smashing = false;
+      player.crouching = false;
+      player.weapon = loadout;
+      player.weaponTimer = loadout ? Infinity : 0;
+      player.invuln = 2.2;
+    }
+  }
+
+  function stageMechanicText(index) {
+    if (index === 0) return "ARMORED BREACH";
+    if (index === 1) return "NEON ASCENT";
+    if (index === 2) return "LOW GRAVITY ACTIVE";
+    if (index === 3) return "BIO-LAUNCH PODS ONLINE";
+    if (index === 4) return "MOVING MAGLEV ROUTES";
+    return "TIME GATES ONLINE";
+  }
+
+  function startStageIntro(index, nextState, focusX, initial = false) {
+    stageIntro = {
+      level: index,
+      nextState,
+      focusX,
+      duration: initial ? 2.45 : 2.15,
+      timer: initial ? 2.45 : 2.15,
+      goCue: false
+    };
+    levelState = "stage_intro";
+    enemyBullets = [];
+    bullets = [];
+    clearControls();
+
+    if (nextState === "vehicle" && introVehicle) {
+      introVehicle.speed = 0;
+      introVehicle.cruiseSpeed = introVehicle.cruiseSpeed || 165;
+      for (let i = 0; i < players.length; i++) {
+        players[i].x = introVehicle.x + 66 + i * 58;
+        players[i].y = introVehicle.y - 63;
+        players[i].vx = 0;
+        players[i].vy = 0;
+        players[i].onGround = true;
+      }
+    } else {
+      for (let i = 0; i < players.length; i++) {
+        const player = players[i];
+        player.vx = 0;
+        player.vy = 0;
+        player.onGround = true;
+        player.jumpCount = 0;
+        player.smashing = false;
+        player.setCrouching(false);
+        player.y = terrainSurfaceY(player.x) - player.h;
+        player.invuln = Math.max(player.invuln, stageIntro.duration + 0.7);
+      }
+    }
+
+    setOpeningCamera(focusX);
+  }
+
+  function updateStageIntro(dt) {
+    if (!stageIntro) return false;
+    stageIntro.timer -= dt;
+
+    if (stageIntro.nextState === "vehicle" && introVehicle) {
+      for (let i = 0; i < players.length; i++) {
+        players[i].x = introVehicle.x + 66 + i * 58;
+        players[i].y = introVehicle.y - 63;
+      }
+    }
+
+    if (!stageIntro.goCue && stageIntro.timer <= 0.58) {
+      stageIntro.goCue = true;
+      audio.toneAt(330, 0.08, "square", 0.09, 180);
+      audio.toneAt(520, 0.12, "square", 0.08, 220, 0.07);
+    }
+
+    if (stageIntro.timer <= 0) {
+      const intro = stageIntro;
+      stageIntro = null;
+      levelState = intro.nextState;
+      if (levelState === "vehicle" && introVehicle) introVehicle.speed = introVehicle.cruiseSpeed || 165;
+      for (const player of players) player.entryTimer = 0;
+      clearControls();
+      showBanner(levelState === "vehicle" ? "ARMORED BREACH • FIRE!" : "MOVE OUT!");
+    }
+    return true;
+  }
+
+  function setOpeningCamera(focusX) {
+    const maxCameraX = Math.max(0, LEVEL_W - visibleWorldW);
+    cameraX = clamp(focusX - visibleWorldW * 0.27, 0, maxCameraX);
+    cameraTargetX = cameraX;
+    const focusY = terrainSurfaceY(focusX);
+    cameraY = focusY - visibleWorldH * (portrait ? 0.72 : 0.82);
+    cameraTargetY = cameraY;
+  }
+
   function begin(twoPlayers) {
     audio.ensure();
     coop = twoPlayers;
-    difficulty = Number(document.getElementById("difficulty").value);
+    difficulty = DIFFICULTY_OPTIONS[menuDifficulty].value;
+    const startLevel = clamp(menuLevel, 0, WORLD_ZONES.length - 1);
+    const startX = startLevel === 0 ? 175 : WORLD_ZONES[startLevel].start + 180;
 
-    players = [new Player(0, 175)];
-    if (coop) players.push(new Player(1, 238));
+    players = [new Player(0, startX)];
+    if (coop) players.push(new Player(1, startX + 63));
 
     enemies = [];
     bullets = [];
@@ -4667,14 +4520,16 @@
     portals = [];
     chronoPulse = 0;
     chronoPulseClock = 0;
+    portalWarp = null;
+    stageIntro = null;
     specialAttack = null;
     debris = [];
     triggered = new Set();
     activeBoss = null;
     defeatedBosses = new Set();
-    campaignLevel = 0;
+    campaignLevel = startLevel;
     finalWinTimer = 0;
-    checkpointX = 1100;
+    checkpointX = startLevel === 0 ? 1100 : startX;
     hitStop = 0;
     cameraX = 0;
     cameraY = 0;
@@ -4685,32 +4540,28 @@
     running = true;
     paused = false;
     gameOver = false;
-    levelState = "vehicle";
-    introVehicle = {
-      x: 90,
-      y: GROUND_Y - 74,
-      w: 190,
-      h: 74,
-      speed: 165
-    };
+    levelState = "stage_intro";
+    introVehicle = startLevel === 0
+      ? { x: 90, y: GROUND_Y - 74, w: 190, h: 74, speed: 0, cruiseSpeed: 165 }
+      : null;
     crashTimer = 0;
 
     setupLevel();
+    if (startLevel > 0) prepareDirectLevelStart(startLevel, startX);
 
-    subtitle.textContent = DEFAULT_SUBTITLE;
-    soloBtn.textContent = "START MISSION";
-    coopBtn.textContent = isTouch ? "2P LOCAL • KEYBOARD" : "2 PLAYER CO-OP";
-    menu.style.display = "none";
-    shell.classList.toggle("touch-active", isTouch);
-    pauseBtn.style.display = "block";
-    pauseBtn.textContent = "Ⅱ";
-    p2Card.style.display = coop ? "block" : "none";
-    bossHud.style.display = "none";
+    menuResult = "";
     clearControls();
     resize();
+
+    if (startLevel > 0) {
+      audio.levelStinger(startLevel);
+      addFloatingText(startX + 120, terrainSurfaceY(startX + 120) - 150, `LOADOUT • ${weaponName(DIRECT_START_LOADOUTS[startLevel])}`, "#fff36d", 20);
+    }
+    startStageIntro(startLevel, startLevel === 0 ? "vehicle" : "onfoot", startX, true);
+
+    audio.startMusic(startLevel);
     last = performance.now();
     accumulator = 0;
-    showBanner("ARMORED BREACH • FIRE!");
   }
 
   function startCrash() {
@@ -4719,6 +4570,7 @@
     crashTimer = 0.9;
     cameraHoldX = cameraX;
     introVehicle.speed = 0;
+    audio.crash(2.0);
     explode(introVehicle.x + 130, GROUND_Y - 45, "#ff6a42", 42);
     showBanner("BAIL OUT");
   }
@@ -4749,35 +4601,39 @@
 
   function enterCampaignLevel(index) {
     campaignLevel = index;
-    checkpointX = WORLD_ZONES[index].start + 160;
+    const entryX = WORLD_ZONES[index].start + 160;
+    checkpointX = entryX;
     enemyBullets = [];
+    bullets = [];
+    specialAttack = null;
     const bonusLife = index === 3 || index === 5;
+    let slot = 0;
     for (const player of players) {
       if (player.dead) continue;
+      player.x = entryX + slot * 62;
+      player.y = terrainSurfaceY(player.x) - player.h;
+      player.vx = 0;
+      player.vy = 0;
+      player.onGround = true;
+      player.jumpCount = 0;
+      player.smashing = false;
       player.health = Math.min(player.maxHealth, player.health + 35);
       player.specials = Math.min(3, player.specials + 1);
       if (bonusLife) player.lives = Math.min(5, player.lives + 1);
-      player.invuln = Math.max(player.invuln, 1.8);
+      player.invuln = 3.0;
+      slot++;
     }
-    showBanner(WORLD_ZONES[index].title);
     audio.levelStinger(index);
-    const mechanicText = index === 2
-      ? "LOW GRAVITY ACTIVE"
-      : index === 3
-        ? "BIO-LAUNCH PODS ONLINE"
-        : index === 4
-          ? "MOVING MAGLEV ROUTES"
-          : index === 5
-            ? "DOWN AT PORTALS • TIME PULSES"
-            : "NEW COMBAT ZONE";
-    addFloatingText(checkpointX + 150, terrainSurfaceY(checkpointX + 150) - 175, mechanicText, "#63e5ff", 18);
+    audio.startMusic(index);
+    addFloatingText(entryX + 150, terrainSurfaceY(entryX + 150) - 175, stageMechanicText(index), "#63e5ff", 18);
     addFloatingText(
-      checkpointX + 120,
-      terrainSurfaceY(checkpointX + 120) - 135,
+      entryX + 120,
+      terrainSurfaceY(entryX + 120) - 135,
       bonusLife ? "WEAPONS RETAINED • 1UP" : "WEAPONS RETAINED",
       "#fff36d",
       20
     );
+    startStageIntro(index, "onfoot", entryX, false);
   }
 
   function startBoss(key, x) {
@@ -4785,8 +4641,6 @@
     const profile = BOSS_PROFILES[key];
     showBanner(`WARNING • ${profile.name}`);
     activeBoss = new StageBoss(key, x);
-    bossName.textContent = activeBoss.name;
-    bossHud.style.display = "block";
   }
 
   function runScripts() {
@@ -4836,10 +4690,45 @@
   }
 
 
-  function updateLevelMechanics(dt) {
-    for (const player of players) player.portalCooldown = Math.max(0, (player.portalCooldown || 0) - dt);
-    for (const pad of launchPads) pad.update(dt);
+  function portalDownForPlayer(player) {
+    return player.index === 0
+      ? (touchStick.down || pressed("KeyS"))
+      : pressed("ArrowDown");
+  }
+
+  function updatePortals(dt) {
     for (const portal of portals) portal.update(dt);
+
+    for (const player of players) {
+      player.portalCooldown = Math.max(0, (player.portalCooldown || 0) - dt);
+      if (player.dead) {
+        player.portalContact = false;
+        player.portalDownHeld = false;
+        continue;
+      }
+
+      const down = portalDownForPlayer(player);
+      const touching = portals.find(portal => portal.canActivate(player)) || null;
+      const pressedNow = down && !player.portalDownHeld;
+      const enteredWhileHeld = down && Boolean(touching) && !player.portalContact;
+
+      if (touching && player.portalCooldown <= 0 && (pressedNow || enteredWhileHeld)) {
+        touching.transport(player);
+      }
+
+      player.portalContact = portals.some(portal => portal.canActivate(player));
+      player.portalDownHeld = down;
+    }
+  }
+
+  function updateLevelMechanics(dt) {
+    for (const pad of launchPads) pad.update(dt);
+    updatePortals(dt);
+
+    if (portalWarp) {
+      portalWarp.timer = Math.max(0, portalWarp.timer - dt);
+      if (portalWarp.timer <= 0) portalWarp = null;
+    }
 
     if (campaignLevel === 5 && levelState === "onfoot" && !specialAttack) {
       chronoPulseClock += dt;
@@ -4859,6 +4748,17 @@
   function update(dt) {
     time += dt;
 
+    if (stageIntro) {
+      updateStageIntro(dt);
+      for (const particle of particles) particle.update(dt);
+      for (const text of floatingTexts) text.update(dt);
+      particles = particles.filter(entity => !entity.dead);
+      floatingTexts = floatingTexts.filter(entity => !entity.dead);
+      updateCamera(dt);
+      updateHud();
+      return;
+    }
+
     if (levelState === "vehicle" && introVehicle) {
       introVehicle.x += introVehicle.speed * dt;
     }
@@ -4870,6 +4770,11 @@
 
     const cinematic = Boolean(victoryScene);
     if (!cinematic) runScripts();
+    if (stageIntro) {
+      updateCamera(dt);
+      updateHud();
+      return;
+    }
 
     for (const platform of platforms) platform.update(dt);
     if (!cinematic) updateLevelMechanics(dt);
@@ -4992,11 +4897,11 @@
   function updateHud() {
     const lead = Math.max(cameraX, ...players.map(player => player.x));
     const zone = WORLD_ZONES[campaignLevel] || WORLD_ZONES[0];
-    const progress = clamp((lead - zone.start) / Math.max(1, zone.end - zone.start), 0, 1);
-    progressFill.style.width = (progress * 100).toFixed(1) + "%";
+    hudState.progress = clamp((lead - zone.start) / Math.max(1, zone.end - zone.start), 0, 1);
 
     let phase = zone.short;
-    if (levelState === "vehicle") phase = "ARMORED BREACH • ARMORED";
+    if (levelState === "stage_intro") phase = "READY";
+    else if (levelState === "vehicle") phase = "ARMORED BREACH";
     else if (levelState === "crash") phase = "BAIL OUT";
     else if (victoryScene) phase = victoryScene.final ? "MISSION COMPLETE" : "VICTORY SEQUENCE";
     else if (activeBoss) phase = activeBoss.name;
@@ -5018,38 +4923,8 @@
     else if (campaignLevel === 5 && lead >= 52700) phase = "EMPEROR'S GATE";
     else if (campaignLevel === 5 && lead >= 50100) phase = "CITADEL CLOCKWORK";
     else if (campaignLevel === 5 && lead >= 46000) phase = "TIMEFALL CHASM";
-    const mechanic = campaignLevel === 2
-      ? " • LOW-G"
-      : campaignLevel === 3
-        ? " • BIO-PODS"
-        : campaignLevel === 4
-          ? " • MAGLEV"
-          : campaignLevel === 5
-            ? (chronoPulse > 0 ? " • TIME SLOWED" : " • TIME GATES")
-            : "";
-    phaseLabel.textContent = `L${campaignLevel + 1} • ${phase}${mechanic}`;
-
-    const p1 = players[0];
-    if (p1) {
-      const p1Ratio = clamp(p1.health / p1.maxHealth, 0, 1);
-      p1Health.style.transform = `scaleX(${p1Ratio})`;
-      p1Health.style.background = p1Ratio > 0.55 ? "#57df6c" : p1Ratio > 0.25 ? "#ffd34d" : "#ff4b3e";
-      p1Title.textContent = `P1 • ${weaponName(p1.weapon)}`;
-      p1Info.textContent = `L${p1.lives} • A×${p1.specials} • ${String(p1.score).padStart(6, "0")}`;
-    }
-
-    const p2 = players[1];
-    if (p2) {
-      const p2Ratio = clamp(p2.health / p2.maxHealth, 0, 1);
-      p2Health.style.transform = `scaleX(${p2Ratio})`;
-      p2Health.style.background = p2Ratio > 0.55 ? "#57df6c" : p2Ratio > 0.25 ? "#ffd34d" : "#ff4b3e";
-      p2Title.textContent = `P2 • ${weaponName(p2.weapon)}`;
-      p2Info.textContent = `L${p2.lives} • A×${p2.specials} • ${String(p2.score).padStart(6, "0")}`;
-    }
-
-    if (activeBoss) {
-      bossBar.style.transform = `scaleX(${clamp(activeBoss.health / activeBoss.maxHealth, 0, 1)})`;
-    }
+    const mechanic = campaignLevel === 2 ? " • LOW-G" : campaignLevel === 3 ? " • BIO-PODS" : campaignLevel === 4 ? " • MAGLEV" : campaignLevel === 5 ? (chronoPulse > 0 ? " • TIME SLOWED" : " • TIME GATES") : "";
+    hudState.phase = `L${campaignLevel + 1} • ${phase}${mechanic}`;
   }
 
   function weaponName(weapon) {
@@ -5061,25 +4936,17 @@
 
   function finish(win) {
     if (gameOver) return;
-
     running = false;
     paused = false;
     gameOver = true;
-    shell.classList.remove("touch-active");
-    pauseBtn.style.display = "none";
-    bossHud.style.display = "none";
     clearControls();
-    menu.style.display = "grid";
-
+    audio.stopMusic();
     const score = players.reduce((sum, player) => sum + player.score, 0);
-    subtitle.innerHTML = win
-      ? `Six worlds conquered. Iron Reign has fallen. Squad score: <b>${String(score).padStart(6, "0")}</b>.`
-      : `The campaign failed. Squad score: <b>${String(score).padStart(6, "0")}</b>.`;
-
-    soloBtn.textContent = "RETRY MISSION";
-    coopBtn.textContent = isTouch
-      ? "RETRY 2P • KEYBOARD"
-      : "RETRY CO-OP";
+    menuResult = win
+      ? `CAMPAIGN COMPLETE • SQUAD SCORE ${String(score).padStart(6, "0")}`
+      : `MISSION FAILED • SQUAD SCORE ${String(score).padStart(6, "0")}`;
+    levelState = "menu";
+    updateLevelSelectionPreview();
     resize();
   }
 
@@ -5087,17 +4954,13 @@
     if (!running) return;
     paused = !paused;
     if (paused) clearControls();
-    pauseBtn.textContent = paused ? "▶" : "Ⅱ";
+    audio.setMusicPaused(paused);
     showBanner(paused ? "PAUSED" : "RESUME");
   }
 
-  function showBanner(text) {
-    banner.textContent = text;
-    banner.style.opacity = "1";
-    clearTimeout(showBanner.timer);
-    showBanner.timer = setTimeout(() => {
-      banner.style.opacity = "0";
-    }, 1400);
+  function showBanner(text, duration = 1.4) {
+    bannerText = String(text || "");
+    bannerUntil = performance.now() + duration * 1000;
   }
 
   function zoneIndexAt(x) {
@@ -5560,7 +5423,7 @@
 
     if (platform.motion && !platform.triggered) {
       ctx.fillStyle = safe;
-      ctx.font = "900 16px Courier New";
+      ctx.font = `900 16px ${UI_FONT}`;
       ctx.textAlign = "center";
       const arrow = platform.motion.axis === "x" ? "↔" : "↕";
       ctx.fillText(arrow, platform.x + platform.w / 2, platform.y - 9);
@@ -5568,7 +5431,7 @@
 
     if (platform.triggered) {
       ctx.fillStyle = "#fff36d";
-      ctx.font = "900 16px Courier New";
+      ctx.font = `900 16px ${UI_FONT}`;
       ctx.textAlign = "center";
       ctx.fillText("DROP!", platform.x + platform.w / 2, platform.y - 10);
     }
@@ -5594,26 +5457,474 @@
     ctx.restore();
   }
 
+  function uiRectContains(rect, x, y) {
+    return rect && x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h;
+  }
+
+  function drawPixelPanel(x, y, w, h, fill = "#07101d", edge = "#6f8fa8", shadow = true) {
+    const radius = clamp(Math.min(w, h) * 0.18, 5 * dpr, 13 * dpr);
+    if (shadow) {
+      ctx.fillStyle = "rgba(0,0,0,.52)";
+      roundRect(x + 4 * dpr, y + 5 * dpr, w, h, radius);
+      ctx.fill();
+    }
+    ctx.fillStyle = fill;
+    roundRect(x, y, w, h, radius);
+    ctx.fill();
+    ctx.strokeStyle = edge;
+    ctx.lineWidth = Math.max(2, 2.2 * dpr);
+    roundRect(x + ctx.lineWidth / 2, y + ctx.lineWidth / 2, w - ctx.lineWidth, h - ctx.lineWidth, radius);
+    ctx.stroke();
+  }
+
+  function fitCanvasText(text, maxWidth, startSize, minimum = 8) {
+    let size = startSize;
+    while (size > minimum) {
+      ctx.font = `900 ${size}px ${UI_FONT}`;
+      if (ctx.measureText(text).width <= maxWidth) break;
+      size--;
+    }
+    return size;
+  }
+
+  function wrapCanvasText(text, maxWidth) {
+    const words = String(text).split(/\s+/);
+    const lines = [];
+    let line = "";
+    for (const word of words) {
+      const test = line ? `${line} ${word}` : word;
+      if (ctx.measureText(test).width > maxWidth && line) {
+        lines.push(line);
+        line = word;
+      } else line = test;
+    }
+    if (line) lines.push(line);
+    return lines;
+  }
+
+  function drawMenuBackdrop() {
+    const palettes = [
+      ["#07101d", "#ff5c48", "#263b50"],
+      ["#080726", "#4ce8ff", "#ff5ed7"],
+      ["#030b17", "#69ffb0", "#6b60ff"],
+      ["#07150d", "#8dff5d", "#7b3f52"],
+      ["#071323", "#d6fbff", "#3c7eb0"],
+      ["#10071d", "#ff8df4", "#ffd75e"]
+    ];
+    const [bg, accent, secondary] = palettes[menuLevel];
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const horizon = canvas.height * 0.58;
+    ctx.fillStyle = secondary;
+    for (let i = 0; i < 18; i++) {
+      const w = 12 + (i * 17 % 42);
+      const h = 16 + (i * 31 % Math.max(24, canvas.height * 0.24));
+      const x = (i * 67 + time * (5 + menuLevel)) % (canvas.width + 80) - 40;
+      ctx.globalAlpha = 0.18 + (i % 3) * 0.06;
+      ctx.fillRect(x, horizon - h, w, h);
+    }
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = 2;
+    for (let y = horizon; y < canvas.height; y += 12) {
+      const spread = (y - horizon) * 0.55;
+      ctx.beginPath();
+      ctx.moveTo(canvas.width / 2 - spread, y);
+      ctx.lineTo(canvas.width / 2 + spread, y);
+      ctx.stroke();
+    }
+    for (let i = -7; i <= 7; i++) {
+      ctx.beginPath();
+      ctx.moveTo(canvas.width / 2, horizon);
+      ctx.lineTo(canvas.width / 2 + i * canvas.width * 0.11, canvas.height);
+      ctx.stroke();
+    }
+  }
+
+  function drawMenuArrow(rect, direction, active = false) {
+    drawPixelPanel(rect.x, rect.y, rect.w, rect.h, active ? "#17344b" : "#0b1727", active ? "#fff36d" : "#4ce8ff", false);
+    ctx.fillStyle = active ? "#fff36d" : "#f4f1d0";
+    ctx.beginPath();
+    const cx = rect.x + rect.w / 2;
+    const cy = rect.y + rect.h / 2;
+    const s = Math.min(rect.w, rect.h) * 0.22;
+    if (direction < 0) {
+      ctx.moveTo(cx + s, cy - s); ctx.lineTo(cx - s, cy); ctx.lineTo(cx + s, cy + s);
+    } else {
+      ctx.moveTo(cx - s, cy - s); ctx.lineTo(cx + s, cy); ctx.lineTo(cx - s, cy + s);
+    }
+    ctx.closePath(); ctx.fill();
+  }
+
+  function drawCanvasMenu() {
+    drawMenuBackdrop();
+    const compact = !portrait || canvas.height < 560;
+    const panelW = Math.min(canvas.width - 16, compact ? 660 : 580);
+    const panelH = Math.min(canvas.height - 14, compact ? 292 : 520);
+    const x = Math.round((canvas.width - panelW) / 2);
+    const y = Math.round((canvas.height - panelH) / 2);
+    drawPixelPanel(x, y, panelW, panelH, "#050914", "#6f8fa8", true);
+
+    ctx.textBaseline = "middle";
+    const titleSize = clamp(Math.round(panelH * (compact ? 0.13 : 0.105)), 30, 52);
+    ctx.font = `900 ${titleSize}px ${UI_FONT}`;
+    const titleText = "IRON REIGN";
+    const titleWidth = ctx.measureText(titleText).width;
+    const titleStart = canvas.width / 2 - titleWidth / 2;
+    const titleY = y + panelH * 0.10;
+    ctx.textAlign = "left";
+    ctx.fillStyle = "#02040a";
+    ctx.fillText(titleText, titleStart + 4, titleY + 4);
+    ctx.fillStyle = "#f4f1d0";
+    ctx.fillText("IRON ", titleStart, titleY);
+    ctx.fillStyle = "#ff4b3e";
+    ctx.fillText("REIGN", titleStart + ctx.measureText("IRON ").width, titleY);
+    ctx.textAlign = "center";
+    ctx.font = `900 ${compact ? 8 : 11}px ${UI_FONT}`;
+    ctx.fillStyle = "#fff36d";
+    ctx.fillText("★ FULL CANVAS ARCADE • ONE CREDIT ★", canvas.width / 2, y + panelH * 0.19);
+
+    const zone = WORLD_ZONES[menuLevel];
+    const labelW = Math.min(panelW - 34, 500);
+    const labelX = canvas.width / 2 - labelW / 2;
+    const contentTop = y + panelH * 0.27;
+    ctx.fillStyle = "#4ce8ff";
+    ctx.font = `900 ${compact ? 10 : 14}px ${UI_FONT}`;
+    ctx.fillText(zone.title, canvas.width / 2, contentTop);
+    ctx.fillStyle = "#9db3bd";
+    ctx.font = `700 ${compact ? 7 : 9}px ${UI_FONT}`;
+    const descLines = wrapCanvasText(LEVEL_MENU_DESCRIPTIONS[menuLevel], labelW - 12).slice(0, compact ? 1 : 3);
+    descLines.forEach((line, i) => ctx.fillText(line, canvas.width / 2, contentTop + 15 + i * 11));
+
+    const rowH = clamp(Math.round(panelH * 0.105), 28, 42);
+    const arrowW = compact ? 38 : 46;
+    const row1Y = y + panelH * 0.40;
+    uiRects.menu.levelPrev = { x: labelX, y: row1Y, w: arrowW, h: rowH };
+    uiRects.menu.levelNext = { x: labelX + labelW - arrowW, y: row1Y, w: arrowW, h: rowH };
+    drawMenuArrow(uiRects.menu.levelPrev, -1, menuFocus === 0);
+    drawMenuArrow(uiRects.menu.levelNext, 1, menuFocus === 0);
+    drawPixelPanel(labelX + arrowW + 5, row1Y, labelW - arrowW * 2 - 10, rowH, "#091426", menuFocus === 0 ? "#fff36d" : "#385b72", false);
+    ctx.fillStyle = "#f4f1d0";
+    ctx.font = `900 ${compact ? 9 : 12}px ${UI_FONT}`;
+    ctx.fillText(`LEVEL ${menuLevel + 1} • ${zone.short}`, canvas.width / 2, row1Y + rowH / 2);
+
+    const row2Y = y + panelH * 0.52;
+    uiRects.menu.diffPrev = { x: labelX, y: row2Y, w: arrowW, h: rowH };
+    uiRects.menu.diffNext = { x: labelX + labelW - arrowW, y: row2Y, w: arrowW, h: rowH };
+    drawMenuArrow(uiRects.menu.diffPrev, -1, menuFocus === 1);
+    drawMenuArrow(uiRects.menu.diffNext, 1, menuFocus === 1);
+    drawPixelPanel(labelX + arrowW + 5, row2Y, labelW - arrowW * 2 - 10, rowH, "#091426", menuFocus === 1 ? "#fff36d" : "#385b72", false);
+    ctx.fillStyle = "#f4f1d0";
+    ctx.fillText(`DIFFICULTY • ${DIFFICULTY_OPTIONS[menuDifficulty].label}`, canvas.width / 2, row2Y + rowH / 2);
+
+    const buttonY = y + panelH * 0.64;
+    const buttonGap = 10;
+    const buttonW = (labelW - buttonGap) / 2;
+    uiRects.menu.solo = { x: labelX, y: buttonY, w: buttonW, h: rowH + 3 };
+    uiRects.menu.coop = { x: labelX + buttonW + buttonGap, y: buttonY, w: buttonW, h: rowH + 3 };
+    drawPixelPanel(uiRects.menu.solo.x, uiRects.menu.solo.y, uiRects.menu.solo.w, uiRects.menu.solo.h, menuFocus === 2 ? "#d94137" : "#922d2e", menuFocus === 2 ? "#fff36d" : "#ff7d5e", true);
+    drawPixelPanel(uiRects.menu.coop.x, uiRects.menu.coop.y, uiRects.menu.coop.w, uiRects.menu.coop.h, menuFocus === 3 ? "#174968" : "#102d47", menuFocus === 3 ? "#fff36d" : "#4ce8ff", true);
+    ctx.fillStyle = "#ffffff";
+    ctx.font = `900 ${compact ? 9 : 11}px ${UI_FONT}`;
+    ctx.fillText(menuLevel === 0 ? "START CAMPAIGN" : `START LEVEL ${menuLevel + 1}`, uiRects.menu.solo.x + buttonW / 2, buttonY + (rowH + 3) / 2);
+    ctx.fillText(isTouch ? "2P • KEYBOARD" : "2 PLAYER CO-OP", uiRects.menu.coop.x + buttonW / 2, buttonY + (rowH + 3) / 2);
+
+    const settingsY = y + panelH * 0.77;
+    const settingsW = (labelW - buttonGap) / 2;
+    const settingsH = compact ? 28 : 32;
+    uiRects.menu.music = { x: labelX, y: settingsY, w: settingsW, h: settingsH };
+    uiRects.menu.fullscreen = { x: labelX + settingsW + buttonGap, y: settingsY, w: settingsW, h: settingsH };
+    drawPixelPanel(uiRects.menu.music.x, uiRects.menu.music.y, uiRects.menu.music.w, uiRects.menu.music.h, menuFocus === 4 ? "#453a12" : "#18160c", menuFocus === 4 ? "#fff36d" : "#8e7831", false);
+    drawPixelPanel(uiRects.menu.fullscreen.x, uiRects.menu.fullscreen.y, uiRects.menu.fullscreen.w, uiRects.menu.fullscreen.h, menuFocus === 5 ? "#17344b" : "#0c1a2b", menuFocus === 5 ? "#fff36d" : "#4ce8ff", false);
+    ctx.font = `900 ${compact ? 8 : 9}px ${UI_FONT}`;
+    ctx.fillStyle = audio.musicMuted ? "#ff6b5c" : "#fff36d";
+    ctx.fillText(audio.musicMuted ? "MUSIC OFF" : "MUSIC ON", uiRects.menu.music.x + settingsW / 2, settingsY + settingsH / 2);
+    ctx.fillStyle = "#4ce8ff";
+    ctx.fillText(fullscreenActive() ? "EXIT FULLSCREEN" : "FULLSCREEN", uiRects.menu.fullscreen.x + settingsW / 2, settingsY + settingsH / 2);
+
+    if (menuResult) {
+      ctx.fillStyle = menuResult.startsWith("CAMPAIGN") ? "#6dff82" : "#ff695b";
+      ctx.font = `900 ${compact ? 8 : 10}px ${UI_FONT}`;
+      ctx.fillText(menuResult, canvas.width / 2, y + panelH * 0.89);
+    } else {
+      ctx.fillStyle = "#7f97a3";
+      ctx.font = `700 ${compact ? 6 : 7}px ${UI_FONT}`;
+      ctx.fillText(compact ? "A STRIKE • B FIRE • C JUMP • X FULLSCREEN" : "MOVE/AIM • DOWN CROUCH/AIR-AIM • C DOUBLE-JUMP • DOWN+C SMASH • A STRIKE • B FIRE • X FULLSCREEN", canvas.width / 2, y + panelH * 0.89);
+    }
+    ctx.fillStyle = "#536675";
+    ctx.font = `700 7px ${UI_FONT}`;
+    ctx.textAlign = "right";
+    ctx.fillText("v4.0 • CLEAN CANVAS", x + panelW - 9, y + panelH - 8);
+  }
+
+  function drawHealthCard(player, x, y, right = false) {
+    const w = Math.min(155, canvas.width * 0.31);
+    const h = 40;
+    drawPixelPanel(x, y, w, h, "#07101d", player.color, true);
+    const ratio = clamp(player.health / player.maxHealth, 0, 1);
+    const healthColor = ratio > 0.55 ? "#57df6c" : ratio > 0.25 ? "#ffd34d" : "#ff4b3e";
+    ctx.textAlign = right ? "right" : "left";
+    ctx.textBaseline = "top";
+    ctx.font = `900 9px ${UI_FONT}`;
+    ctx.fillStyle = "#f4f1d0";
+    ctx.fillText(`P${player.index + 1} • ${weaponName(player.weapon)}`, right ? x + w - 7 : x + 7, y + 5);
+    ctx.fillStyle = "#101621"; ctx.fillRect(x + 7, y + 18, w - 14, 7);
+    ctx.fillStyle = healthColor; ctx.fillRect(x + 7, y + 18, (w - 14) * ratio, 7);
+    ctx.fillStyle = "#9db3bd";
+    ctx.font = `700 7px ${UI_FONT}`;
+    ctx.fillText(`L${player.lives}  A×${player.specials}  ${String(player.score).padStart(6, "0")}`, right ? x + w - 7 : x + 7, y + 29);
+    return w;
+  }
+
+  function drawCanvasHud() {
+    const pad = 7;
+    const topPad = pad + safeTop;
+    if (players[0]) drawHealthCard(players[0], pad + safeLeft, topPad, false);
+    if (players[1]) {
+      const w = Math.min(155, canvas.width * 0.31);
+      drawHealthCard(players[1], canvas.width - w - pad - safeRight, topPad, true);
+    }
+    const progressW = Math.min(220, canvas.width * (players[1] ? 0.25 : 0.34));
+    const progressX = canvas.width / 2 - progressW / 2;
+    const progressY = 8 + safeTop;
+    ctx.fillStyle = "#07101d"; ctx.fillRect(progressX, progressY, progressW, 9);
+    ctx.strokeStyle = "#6f8fa8"; ctx.lineWidth = 2; ctx.strokeRect(progressX + 1, progressY + 1, progressW - 2, 7);
+    ctx.fillStyle = "#4ce8ff"; ctx.fillRect(progressX + 3, progressY + 3, (progressW - 6) * hudState.progress, 3);
+    ctx.textAlign = "center"; ctx.textBaseline = "top";
+    const phaseSize = fitCanvasText(hudState.phase, progressW + 72, 8, 6);
+    ctx.font = `900 ${phaseSize}px ${UI_FONT}`; ctx.fillStyle = "#c9e9ef";
+    ctx.fillText(hudState.phase, canvas.width / 2, progressY + 12);
+
+    const iconSize = isTouch ? 32 : 28;
+    uiRects.pause = { x: canvas.width / 2 - iconSize / 2, y: 31 + safeTop, w: iconSize, h: 26 };
+    drawPixelPanel(uiRects.pause.x, uiRects.pause.y, uiRects.pause.w, uiRects.pause.h, "#07101d", "#6f8fa8", false);
+    ctx.fillStyle = "#f4f1d0"; ctx.font = `900 12px ${UI_FONT}`; ctx.textBaseline = "middle";
+    ctx.fillText(paused ? "▶" : "Ⅱ", canvas.width / 2, uiRects.pause.y + uiRects.pause.h / 2 + 1);
+
+    const utilityY = (players[1] ? 52 : 7) + safeTop;
+    uiRects.fullscreen = { x: canvas.width - safeRight - iconSize * 2 - 12, y: utilityY, w: iconSize, h: 26 };
+    uiRects.mute = { x: canvas.width - safeRight - iconSize - 7, y: utilityY, w: iconSize, h: 26 };
+    drawPixelPanel(uiRects.fullscreen.x, uiRects.fullscreen.y, uiRects.fullscreen.w, uiRects.fullscreen.h, "#07101d", fullscreenActive() ? "#fff36d" : "#4ce8ff", false);
+    drawPixelPanel(uiRects.mute.x, uiRects.mute.y, uiRects.mute.w, uiRects.mute.h, "#07101d", audio.musicMuted ? "#ff6b5c" : "#6f8fa8", false);
+    ctx.font = `900 9px ${UI_FONT}`;
+    ctx.fillStyle = fullscreenActive() ? "#fff36d" : "#4ce8ff";
+    ctx.fillText("FS", uiRects.fullscreen.x + uiRects.fullscreen.w / 2, uiRects.fullscreen.y + uiRects.fullscreen.h / 2 + 1);
+    ctx.fillStyle = audio.musicMuted ? "#ff6b5c" : "#fff36d";
+    ctx.font = `900 11px ${UI_FONT}`;
+    ctx.fillText(audio.musicMuted ? "×" : "♫", uiRects.mute.x + uiRects.mute.w / 2, uiRects.mute.y + uiRects.mute.h / 2 + 1);
+
+    if (activeBoss && !activeBoss.dead) {
+      const w = Math.min(canvas.width * 0.70, 430);
+      const x = canvas.width / 2 - w / 2;
+      const y = (players[1] ? 80 : 61) + safeTop;
+      const ratio = clamp(activeBoss.health / activeBoss.maxHealth, 0, 1);
+      ctx.textAlign = "center"; ctx.textBaseline = "bottom"; ctx.font = `900 9px ${UI_FONT}`; ctx.fillStyle = "#fff36d";
+      ctx.fillText(activeBoss.name, canvas.width / 2, y - 2);
+      ctx.fillStyle = "#18080c"; ctx.fillRect(x, y, w, 9);
+      ctx.strokeStyle = "#f4f1d0"; ctx.lineWidth = 2; ctx.strokeRect(x + 1, y + 1, w - 2, 7);
+      ctx.fillStyle = activeBoss.profile.accent; ctx.fillRect(x + 3, y + 3, (w - 6) * ratio, 3);
+    }
+
+    if (bannerText && performance.now() < bannerUntil) {
+      const remaining = Math.max(0, bannerUntil - performance.now());
+      const alpha = Math.min(1, remaining / 180);
+      ctx.globalAlpha = alpha;
+      const size = fitCanvasText(bannerText, canvas.width * 0.88, Math.max(18, canvas.width * 0.055), 12);
+      ctx.font = `900 ${size}px ${UI_FONT}`;
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      const tw = ctx.measureText(bannerText).width;
+      ctx.fillStyle = "rgba(0,0,0,.58)"; ctx.fillRect(canvas.width / 2 - tw / 2 - 9, canvas.height * 0.22 - size * 0.65, tw + 18, size * 1.3);
+      ctx.fillStyle = "#02040a"; ctx.fillText(bannerText, canvas.width / 2 + 3, canvas.height * 0.22 + 3);
+      ctx.fillStyle = "#fff36d"; ctx.fillText(bannerText, canvas.width / 2, canvas.height * 0.22);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  function drawCanvasTouchControls() {
+    if (!isTouch || !running || paused || stageIntro) return;
+
+    const cssW = canvas.width / dpr;
+    const cssH = canvas.height / dpr;
+    const px = value => value * dpr;
+    const safeTopCss = safeTop / dpr;
+    const safeRightCss = safeRight / dpr;
+    const safeBottomCss = safeBottom / dpr;
+    const safeLeftCss = safeLeft / dpr;
+
+    const stickRadiusCss = portrait
+      ? clamp(cssW * 0.12, 42, 54)
+      : clamp(cssH * 0.105, 34, 43);
+    const stickXCss = safeLeftCss + stickRadiusCss + (portrait ? 16 : 13);
+    const stickYCss = cssH - safeBottomCss - stickRadiusCss - (portrait ? 20 : 12);
+    const stickRadius = px(stickRadiusCss);
+    const baseX = px(stickXCss);
+    const baseY = px(stickYCss);
+    uiRects.stick = { x: baseX, y: baseY, r: stickRadius * 1.22 };
+
+    ctx.save();
+    ctx.globalAlpha = touchStick.active ? 0.92 : 0.66;
+    ctx.fillStyle = "rgba(4,12,24,.58)";
+    ctx.beginPath(); ctx.arc(baseX, baseY, stickRadius, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = "rgba(177,215,232,.82)";
+    ctx.lineWidth = px(2.2); ctx.stroke();
+    ctx.strokeStyle = "rgba(76,232,255,.48)";
+    ctx.lineWidth = px(1.2);
+    ctx.beginPath();
+    ctx.moveTo(baseX - stickRadius * .7, baseY); ctx.lineTo(baseX + stickRadius * .7, baseY);
+    ctx.moveTo(baseX, baseY - stickRadius * .7); ctx.lineTo(baseX, baseY + stickRadius * .7);
+    ctx.stroke();
+    const kx = baseX + touchStick.knobX;
+    const ky = baseY + touchStick.knobY;
+    ctx.fillStyle = "rgba(52,79,108,.92)";
+    ctx.beginPath(); ctx.arc(kx, ky, stickRadius * 0.42, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = "#4ce8ff"; ctx.lineWidth = px(2); ctx.stroke();
+    if (touchStick.active) {
+      const angle = Math.atan2(touchStick.aimY, touchStick.aimX);
+      ctx.strokeStyle = "#4ce8ff"; ctx.lineWidth = px(2.4);
+      ctx.beginPath();
+      ctx.moveTo(baseX, baseY);
+      ctx.lineTo(baseX + Math.cos(angle) * stickRadius * 0.80, baseY + Math.sin(angle) * stickRadius * 0.80);
+      ctx.stroke();
+    }
+
+    let defs;
+    if (portrait) {
+      const r = clamp(cssW * 0.086, 32, 42);
+      const fireX = cssW - safeRightCss - r - 14;
+      const fireY = cssH - safeBottomCss - r - 22;
+      defs = [
+        ["KeyG", "A", "STRIKE", fireX - r * 3.65, fireY + r * 0.12, r * 0.88, "#d39a28"],
+        ["KeyF", "B", "FIRE", fireX - r * 1.80, fireY, r, "#b92f35"],
+        ["KeyW", "C", "JUMP", fireX, fireY - r * 0.30, r, "#285b91"]
+      ];
+    } else {
+      // Compact controller arc in the bottom-right corner. It occupies less than
+      // one quarter of a normal phone display and has no opaque backing panel.
+      const r = clamp(cssH * 0.073, 26, 31);
+      const edgeX = cssW - safeRightCss - r - 13;
+      const edgeY = cssH - safeBottomCss - r - 13;
+      defs = [
+        ["KeyG", "A", "STRIKE", edgeX - r * 4.35, edgeY + r * 0.06, r * 0.82, "#d39a28"],
+        ["KeyF", "B", "FIRE", edgeX - r * 2.18, edgeY, r, "#b92f35"],
+        ["KeyW", "C", "JUMP", edgeX, edgeY - r * 1.05, r * 0.96, "#285b91"]
+      ];
+    }
+
+    for (const [code, letter, label, cssX, cssY, cssR, color] of defs) {
+      const x = px(cssX), y = px(cssY), r = px(cssR);
+      uiRects.buttons[code] = { x, y, r };
+      const held = Boolean(touchKeys[code]);
+      ctx.globalAlpha = held ? 0.98 : (portrait ? 0.78 : 0.68);
+      ctx.fillStyle = "rgba(0,0,0,.42)";
+      ctx.beginPath(); ctx.arc(x + px(2), y + px(3), r, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = held ? "#f6f3dc" : color;
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = held ? "#fff36d" : "rgba(255,255,255,.88)";
+      ctx.lineWidth = px(2.2); ctx.stroke();
+      ctx.fillStyle = held ? color : "#ffffff";
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.font = `900 ${px(cssR * 0.60)}px ${UI_FONT}`;
+      ctx.fillText(letter, x, y - px(cssR * 0.10));
+      ctx.font = `800 ${px(Math.max(7, cssR * 0.22))}px ${UI_FONT}`;
+      ctx.fillText(label, x, y + px(cssR * 0.43));
+    }
+    ctx.restore();
+  }
+
+  function drawStageIntroOverlay() {
+    if (!stageIntro) return;
+    const elapsed = stageIntro.duration - stageIntro.timer;
+    const reveal = clamp(elapsed / 0.35, 0, 1);
+    const leave = clamp(stageIntro.timer / 0.25, 0, 1);
+    const alpha = Math.min(reveal, leave);
+    const zone = WORLD_ZONES[stageIntro.level];
+    const ready = stageIntro.timer > 0.58;
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = "rgba(1,4,10,.82)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const panelW = Math.min(canvas.width * 0.88, 560);
+    const panelH = Math.min(canvas.height * 0.52, 210);
+    const x = canvas.width / 2 - panelW / 2;
+    const y = canvas.height / 2 - panelH / 2;
+    drawPixelPanel(x, y, panelW, panelH, "#07101d", "#4ce8ff", true);
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "#4ce8ff";
+    ctx.font = `900 ${clamp(Math.round(panelH * 0.14), 16, 28)}px ${UI_FONT}`;
+    ctx.fillText(`LEVEL ${stageIntro.level + 1}`, canvas.width / 2, y + panelH * 0.24);
+    ctx.fillStyle = "#f4f1d0";
+    ctx.font = `900 ${fitCanvasText(zone.short, panelW * 0.86, clamp(Math.round(panelH * 0.20), 22, 42), 14)}px ${UI_FONT}`;
+    ctx.fillText(zone.short, canvas.width / 2, y + panelH * 0.47);
+    ctx.fillStyle = "#9db3bd";
+    ctx.font = `900 ${clamp(Math.round(panelH * 0.075), 9, 14)}px ${UI_FONT}`;
+    ctx.fillText(stageMechanicText(stageIntro.level), canvas.width / 2, y + panelH * 0.64);
+    ctx.fillStyle = ready ? "#fff36d" : "#6dff82";
+    ctx.font = `900 ${clamp(Math.round(panelH * 0.18), 22, 38)}px ${UI_FONT}`;
+    ctx.fillText(ready ? "READY" : "GO!", canvas.width / 2, y + panelH * 0.82);
+    ctx.restore();
+  }
+
+  function drawPortalWarpOverlay() {
+    if (!portalWarp) return;
+    const life = clamp(portalWarp.timer / portalWarp.duration, 0, 1);
+    const strength = Math.min(1, life * 1.35);
+    const centerX = canvas.width * 0.5;
+    const centerY = canvas.height * 0.5;
+    const maxRadius = Math.hypot(canvas.width, canvas.height) * 0.62;
+
+    ctx.save();
+    ctx.fillStyle = `rgba(2,0,10,${0.82 * strength})`;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.translate(centerX, centerY);
+    ctx.strokeStyle = portalWarp.color;
+    ctx.lineWidth = Math.max(2, Math.round(canvas.width * 0.006));
+    ctx.globalAlpha = 0.78 * strength;
+
+    for (let i = 0; i < 6; i++) {
+      const phase = 1 - life;
+      const radius = ((phase * 1.8 + i / 6) % 1) * maxRadius;
+      ctx.beginPath();
+      ctx.ellipse(
+        portalWarp.direction * (i - 2.5) * 7,
+        0,
+        radius,
+        radius * 0.48,
+        0,
+        0,
+        Math.PI * 2
+      );
+      ctx.stroke();
+    }
+
+    ctx.globalAlpha = 0.34 * strength;
+    ctx.fillStyle = portalWarp.color;
+    for (let y = -canvas.height / 2; y < canvas.height / 2; y += 10) {
+      const shift = ((1 - life) * 80 + y * 0.13) % 28;
+      ctx.fillRect(-canvas.width / 2 + shift, y, canvas.width, 2);
+    }
+    ctx.restore();
+  }
+
   function draw() {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.imageSmoothingEnabled = false;
+    ctx.imageSmoothingEnabled = true;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    if (!running && levelState === "menu") {
+      time += 1 / 60;
+      drawCanvasMenu();
+      return;
+    }
+
     ctx.fillStyle = "#02040a";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-
     ctx.save();
     const snappedCameraX = Math.round(cameraX * viewScale) / viewScale;
     const snappedCameraY = Math.round(cameraY * viewScale) / viewScale;
-    ctx.setTransform(
-      viewScale,
-      0,
-      0,
-      viewScale,
-      -snappedCameraX * viewScale,
-      -snappedCameraY * viewScale
-    );
-
+    ctx.setTransform(viewScale, 0, 0, viewScale, -snappedCameraX * viewScale, -snappedCameraY * viewScale);
     drawBackground();
-
     for (const pad of launchPads) if (inView(pad, 120)) pad.draw();
     for (const portal of portals) if (inView(portal, 120)) portal.draw();
     for (const hazard of hazards) if (inView(hazard, 160)) hazard.draw();
@@ -5631,21 +5942,32 @@
     for (const particle of particles) if (inView(particle, 170)) particle.draw();
     for (const blast of blastEffects) if (inView({ x: blast.x - 180, y: blast.y - 180, w: 360, h: 360 }, 100)) blast.draw();
     for (const text of floatingTexts) if (inView({ x: text.x - 100, y: text.y - 30, w: 200, h: 60 }, 80)) text.draw();
-
     ctx.restore();
 
     if (victoryScene) victoryScene.drawOverlay();
+    drawPortalWarpOverlay();
+    if (stageIntro) {
+      drawStageIntroOverlay();
+    } else {
+      drawCanvasHud();
+      drawCanvasTouchControls();
+    }
 
     if (paused) {
-      ctx.fillStyle = "rgba(0,0,0,.68)";
+      ctx.fillStyle = "rgba(0,0,0,.72)";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.font = `900 ${Math.max(22, Math.round(canvas.width * 0.07))}px Courier New`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillStyle = "#02040a";
-      ctx.fillText("PAUSED", canvas.width / 2 + 3, canvas.height / 2 + 3);
-      ctx.fillStyle = "#fff36d";
-      ctx.fillText("PAUSED", canvas.width / 2, canvas.height / 2);
+      const w = Math.min(300, canvas.width * 0.72);
+      const h = 104;
+      drawPixelPanel(canvas.width / 2 - w / 2, canvas.height / 2 - h / 2, w, h, "#07101d", "#fff36d", true);
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.font = `900 ${Math.max(24, Math.round(canvas.width * 0.06))}px ${UI_FONT}`;
+      ctx.fillStyle = "#fff36d"; ctx.fillText("PAUSED", canvas.width / 2, canvas.height / 2 - 13);
+      ctx.font = `900 9px ${UI_FONT}`; ctx.fillStyle = "#9db3bd";
+      ctx.fillText("TAP ▶ OR PRESS P TO RESUME", canvas.width / 2, canvas.height / 2 + 22);
+      uiRects.pause = { x: canvas.width / 2 - 34, y: canvas.height / 2 + 34, w: 68, h: 30 };
+      drawPixelPanel(uiRects.pause.x, uiRects.pause.y, uiRects.pause.w, uiRects.pause.h, "#17344b", "#fff36d", false);
+      ctx.fillStyle = "#fff36d"; ctx.font = `900 13px ${UI_FONT}`;
+      ctx.fillText("▶", canvas.width / 2, uiRects.pause.y + uiRects.pause.h / 2 + 1);
     }
   }
 
@@ -5694,161 +6016,181 @@
     touchStick.active = false;
     touchStick.pointerId = null;
     touchStick.moveX = 0;
-    touchStick.duck = false;
-
+    touchStick.down = false;
+    touchStick.knobX = 0;
+    touchStick.knobY = 0;
     if (!keepAim) {
       touchStick.aimX = 1;
       touchStick.aimY = 0;
     }
-
-    joystickKnob.style.transform = "translate(0px,0px)";
-    const angle = Math.atan2(touchStick.aimY, touchStick.aimX);
-    joystickAim.style.transform = `translateY(-50%) rotate(${angle}rad) scaleX(.15)`;
   }
 
   function clearControls() {
     for (const key in keys) keys[key] = false;
     for (const key in touchKeys) touchKeys[key] = false;
     for (const key in queuedPresses) queuedPresses[key] = 0;
+    pointerActions.clear();
+    uiRects.buttons = {};
     resetJoystick(false);
-    document.querySelectorAll(".action").forEach(button => button.classList.remove("is-held"));
   }
 
-  function updateStick(event) {
-    const rect = joystickBase.getBoundingClientRect();
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.top + rect.height / 2;
-    const max = Math.max(28, Math.min(rect.width, rect.height) * 0.34);
+  function canvasPoint(event) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: (event.clientX - rect.left) * canvas.width / Math.max(1, rect.width),
+      y: (event.clientY - rect.top) * canvas.height / Math.max(1, rect.height)
+    };
+  }
 
-    let dx = event.clientX - centerX;
-    let dy = event.clientY - centerY;
+  function updateStickPoint(x, y) {
+    const base = uiRects.stick;
+    if (!base) return;
+    const max = base.r * 0.66;
+    let dx = x - base.x;
+    let dy = y - base.y;
     const distance = Math.hypot(dx, dy);
-
-    if (distance > max) {
-      dx *= max / distance;
-      dy *= max / distance;
-    }
-
+    if (distance > max) { dx *= max / distance; dy *= max / distance; }
+    touchStick.knobX = dx;
+    touchStick.knobY = dy;
     const strength = Math.hypot(dx, dy) / max;
-    joystickKnob.style.transform = `translate(${dx}px,${dy}px)`;
-
     if (strength > 0.10) {
       const length = Math.hypot(dx, dy) || 1;
       const nx = dx / length;
       const ny = dy / length;
-      const duck = dy / max > 0.46 && Math.abs(dx / max) < 0.78;
-
-      touchStick.duck = duck;
-      if (duck) {
-        touchStick.moveX = 0;
-        touchStick.aimY = 0;
-        if (Math.abs(nx) > 0.18) touchStick.aimX = Math.sign(nx);
-        else if (Math.abs(touchStick.aimX) < 0.5) touchStick.aimX = 1;
-      } else {
-        touchStick.aimX = nx;
-        touchStick.aimY = ny;
-        touchStick.moveX = Math.abs(dx / max) >= 0.28 ? Math.sign(dx) : 0;
-      }
-
-      const angle = Math.atan2(touchStick.aimY, touchStick.aimX);
-      joystickAim.style.transform = `translateY(-50%) rotate(${angle}rad) scaleX(${Math.max(0.22, strength)})`;
+      const down = dy / max > 0.46 && Math.abs(dx / max) < 0.78;
+      touchStick.down = down;
+      touchStick.aimX = nx;
+      touchStick.aimY = ny;
+      touchStick.moveX = down || Math.abs(dx / max) < 0.28 ? 0 : Math.sign(dx);
     } else {
       touchStick.moveX = 0;
-      touchStick.duck = false;
+      touchStick.down = false;
     }
   }
 
-  moveZone.addEventListener("pointerdown", event => {
-    event.preventDefault();
-    if (touchStick.active) return;
+  function pressCanvasAction(pointerId, code) {
+    pointerActions.set(pointerId, code);
+    touchKeys[code] = true;
+    if (code === "KeyW" || code === "KeyG") queuePress(code);
+  }
 
-    touchStick.active = true;
-    touchStick.pointerId = event.pointerId;
-    try { moveZone.setPointerCapture(event.pointerId); } catch (_) {}
-    updateStick(event);
+  function releaseCanvasPointer(pointerId) {
+    if (touchStick.active && pointerId === touchStick.pointerId) resetJoystick(true);
+    const code = pointerActions.get(pointerId);
+    if (code) {
+      pointerActions.delete(pointerId);
+      touchKeys[code] = [...pointerActions.values()].includes(code);
+    }
+  }
+
+  function cycleMenuLevel(delta) {
+    menuLevel = (menuLevel + delta + WORLD_ZONES.length) % WORLD_ZONES.length;
+    updateLevelSelectionPreview();
     audio.ensure();
-  });
+    audio.levelStinger(menuLevel);
+  }
 
-  moveZone.addEventListener("pointermove", event => {
-    if (touchStick.active && event.pointerId === touchStick.pointerId) {
-      event.preventDefault();
-      updateStick(event);
+  function cycleMenuDifficulty(delta) {
+    menuDifficulty = (menuDifficulty + delta + DIFFICULTY_OPTIONS.length) % DIFFICULTY_OPTIONS.length;
+    updateLevelSelectionPreview();
+    audio.tone(330 + menuDifficulty * 55, 0.06, "square", 0.07, 45);
+  }
+
+  function activateMenuFocus() {
+    if (menuFocus === 0) cycleMenuLevel(1);
+    else if (menuFocus === 1) cycleMenuDifficulty(1);
+    else if (menuFocus === 2) begin(false);
+    else if (menuFocus === 3) begin(true);
+    else if (menuFocus === 4) audio.toggleMusic();
+    else if (menuFocus === 5) toggleFullscreen();
+  }
+
+  canvas.addEventListener("pointerdown", event => {
+    event.preventDefault();
+    const point = canvasPoint(event);
+    audio.ensure();
+    try { canvas.setPointerCapture(event.pointerId); } catch (_) {}
+
+    if (!running && levelState === "menu") {
+      const m = uiRects.menu;
+      if (uiRectContains(m.levelPrev, point.x, point.y)) cycleMenuLevel(-1);
+      else if (uiRectContains(m.levelNext, point.x, point.y)) cycleMenuLevel(1);
+      else if (uiRectContains(m.diffPrev, point.x, point.y)) cycleMenuDifficulty(-1);
+      else if (uiRectContains(m.diffNext, point.x, point.y)) cycleMenuDifficulty(1);
+      else if (uiRectContains(m.solo, point.x, point.y)) begin(false);
+      else if (uiRectContains(m.coop, point.x, point.y)) begin(true);
+      else if (uiRectContains(m.music, point.x, point.y)) audio.toggleMusic();
+      else if (uiRectContains(m.fullscreen, point.x, point.y)) toggleFullscreen();
+      return;
     }
-  });
 
-  const releaseStick = event => {
-    if (touchStick.active && event.pointerId === touchStick.pointerId) {
-      event.preventDefault();
-      resetJoystick(true);
-    }
-  };
+    if (uiRectContains(uiRects.pause, point.x, point.y)) { togglePause(); return; }
+    if (uiRectContains(uiRects.mute, point.x, point.y)) { audio.toggleMusic(); return; }
+    if (uiRectContains(uiRects.fullscreen, point.x, point.y)) { toggleFullscreen(); return; }
+    if (paused || stageIntro) return;
 
-  moveZone.addEventListener("pointerup", releaseStick);
-  moveZone.addEventListener("pointercancel", releaseStick);
-  moveZone.addEventListener("lostpointercapture", releaseStick);
-
-  function bindHold(button, code) {
-    const pointerIds = new Set();
-
-    button.addEventListener("pointerdown", event => {
-      event.preventDefault();
-      pointerIds.add(event.pointerId);
-      touchKeys[code] = true;
-      if (code === "KeyW" || code === "KeyG") queuePress(code);
-      button.classList.add("is-held");
-      try { button.setPointerCapture(event.pointerId); } catch (_) {}
-      audio.ensure();
-    });
-
-    const release = event => {
-      event.preventDefault();
-      pointerIds.delete(event.pointerId);
-      if (!pointerIds.size) {
-        touchKeys[code] = false;
-        button.classList.remove("is-held");
+    if (isTouch && uiRects.stick) {
+      const dist = Math.hypot(point.x - uiRects.stick.x, point.y - uiRects.stick.y);
+      if (!touchStick.active && dist <= uiRects.stick.r) {
+        touchStick.active = true;
+        touchStick.pointerId = event.pointerId;
+        updateStickPoint(point.x, point.y);
+        return;
       }
-    };
+      for (const [code, rect] of Object.entries(uiRects.buttons)) {
+        if (Math.hypot(point.x - rect.x, point.y - rect.y) <= rect.r * 1.16) {
+          pressCanvasAction(event.pointerId, code);
+          return;
+        }
+      }
+    }
+  });
 
-    button.addEventListener("pointerup", release);
-    button.addEventListener("pointercancel", release);
-    button.addEventListener("lostpointercapture", release);
+  canvas.addEventListener("pointermove", event => {
+    if (touchStick.active && event.pointerId === touchStick.pointerId) {
+      event.preventDefault();
+      const point = canvasPoint(event);
+      updateStickPoint(point.x, point.y);
+    }
+  });
+
+  for (const name of ["pointerup", "pointercancel", "lostpointercapture"]) {
+    canvas.addEventListener(name, event => {
+      event.preventDefault();
+      releaseCanvasPointer(event.pointerId);
+    });
   }
-
-  bindHold(document.getElementById("fireBtn"), "KeyF");
-  bindHold(document.getElementById("jumpBtn"), "KeyW");
-  bindHold(document.getElementById("powerBtn"), "KeyG");
-
-  if (isTouch) {
-    document.getElementById("coopBtn").textContent = "2P LOCAL • KEYBOARD";
-  }
-
-  soloBtn.addEventListener("click", () => begin(false));
-  coopBtn.addEventListener("click", () => begin(true));
-  pauseBtn.addEventListener("click", togglePause);
 
   addEventListener("keydown", event => {
-    if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Space"].includes(event.code)) {
-      event.preventDefault();
+    if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Space"].includes(event.code)) event.preventDefault();
+    audio.ensure();
+
+    if (!running && levelState === "menu") {
+      if (event.repeat) return;
+      if (event.code === "ArrowUp" || event.code === "KeyW") menuFocus = (menuFocus + MENU_FOCUS_COUNT - 1) % MENU_FOCUS_COUNT;
+      else if (event.code === "ArrowDown" || event.code === "KeyS") menuFocus = (menuFocus + 1) % MENU_FOCUS_COUNT;
+      else if (event.code === "ArrowLeft" || event.code === "KeyA") {
+        if (menuFocus === 0) cycleMenuLevel(-1); else if (menuFocus === 1) cycleMenuDifficulty(-1);
+      } else if (event.code === "ArrowRight" || event.code === "KeyD") {
+        if (menuFocus === 0) cycleMenuLevel(1); else if (menuFocus === 1) cycleMenuDifficulty(1);
+      } else if (event.code === "Enter" || event.code === "Space") activateMenuFocus();
+      else if (event.code === "KeyM") audio.toggleMusic();
+      else if (event.code === "KeyX") toggleFullscreen();
+      return;
     }
 
     keys[event.code] = true;
     if (!event.repeat && ["KeyW", "KeyG", "ArrowUp", "KeyL"].includes(event.code)) queuePress(event.code);
-    audio.ensure();
-
-    if (!event.repeat && (event.code === "Escape" || event.code === "KeyP")) {
-      togglePause();
-    }
+    if (!event.repeat && (event.code === "Escape" || event.code === "KeyP")) togglePause();
+    if (!event.repeat && event.code === "KeyM") audio.toggleMusic();
+    if (!event.repeat && event.code === "KeyX") toggleFullscreen();
   });
 
-  addEventListener("keyup", event => {
-    keys[event.code] = false;
-  });
-
+  addEventListener("keyup", event => { keys[event.code] = false; });
   addEventListener("blur", () => {
     clearControls();
     if (running && !paused) togglePause();
   });
-
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
       clearControls();
@@ -5857,6 +6199,8 @@
   });
 
   setupLevel();
+  updateLevelSelectionPreview();
+  levelState = "menu";
   resize();
   requestAnimationFrame(loop);
 })();
