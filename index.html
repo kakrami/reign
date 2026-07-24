@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>Iron Reign: Stage Assault v5.1</title>
+<title>Iron Reign: Stage Assault v5.4</title>
 <style>
   :root {
     --safe-top: env(safe-area-inset-top, 0px);
@@ -131,25 +131,25 @@
     cityWalker: {
       name: "SIEGE WALKER", form: "walker", w: 195, h: 205,
       health: 680, score: 3500, left: 620, right: 360,
-      color: "#394553", accent: "#ff574d", attacks: ["horizontal", "fan", "rain"],
+      color: "#394553", accent: "#ff574d", attacks: ["stomp", "horizontal", "fan", "stomp", "rain"],
       reward: ["health", "special"], checkpoint: 5350
     },
     cityOmega: {
       name: "OMEGA WAR ENGINE", form: "tank", w: 255, h: 275,
-      health: 1380, score: 8000, left: 700, right: 100,
-      color: "#35434f", accent: "#ff9b42", attacks: ["missiles", "debris", "laser", "horizontal"],
+      health: 1550, score: 9000, left: 700, right: 100, cadence: 2.55,
+      color: "#35434f", accent: "#ff9b42", attacks: ["ram", "mortar", "missiles", "crush", "ram", "laser"],
       reward: ["health", "special"], checkpoint: 9700, levelEnd: 0
     },
     neonGunship: {
       name: "AEGIS GUNSHIP", form: "gunship", w: 300, h: 145,
       health: 1320, score: 6500, left: 720, right: 430, cadence: 2.65,
-      color: "#31345f", accent: "#59ecff", attacks: ["missiles", "rain", "fan", "cross"],
+      color: "#31345f", accent: "#59ecff", attacks: ["swoop", "bombRun", "deploy", "missiles", "swoop"],
       reward: [3, "health"], checkpoint: 14300, floating: true
     },
     neonRail: {
       name: "TITAN RAIL CANNON", form: "rail", w: 285, h: 255,
       health: 2180, score: 11000, left: 760, right: 120, cadence: 2.55,
-      color: "#472d59", accent: "#ff5ed7", attacks: ["laser", "cross", "summon", "debris"],
+      color: "#472d59", accent: "#ff5ed7", attacks: ["railRush", "laser", "cross", "summon", "railRush"],
       reward: ["health", "special"], checkpoint: 18500, levelEnd: 1
     },
     orbitMantis: {
@@ -161,31 +161,31 @@
     orbitCore: {
       name: "IRON REIGN CORE", form: "core", w: 290, h: 290,
       health: 3150, score: 18000, left: 820, right: 120, cadence: 2.40,
-      color: "#37284f", accent: "#ffdf59", attacks: ["nova", "spiral", "laser", "rain"],
+      color: "#37284f", accent: "#ffdf59", attacks: ["gravity", "spiral", "laser", "nova", "gravity"],
       reward: ["health", "special"], checkpoint: 27340, levelEnd: 2
     },
     bioHydra: {
       name: "TRI-HEAD HYDRA", form: "hydra", w: 285, h: 245,
       health: 2580, score: 13500, left: 780, right: 250, cadence: 2.35,
-      color: "#24462f", accent: "#7dff63", attacks: ["summon", "fan", "rain", "wave"],
+      color: "#24462f", accent: "#7dff63", attacks: ["roots", "fan", "rain", "wave", "roots"],
       reward: [1, "health"], checkpoint: 31900
     },
     bioLeviathan: {
       name: "BIOFORGE LEVIATHAN", form: "beast", w: 330, h: 275,
       health: 3720, score: 20500, left: 840, right: 120, cadence: 2.30,
-      color: "#3f2f35", accent: "#b9ff4d", attacks: ["wave", "summon", "debris", "nova", "laser"],
+      color: "#3f2f35", accent: "#b9ff4d", attacks: ["burrow", "rootWall", "devour", "summon", "burrow"],
       reward: ["health", "special"], checkpoint: 36140, levelEnd: 3
     },
     frostCarrier: {
       name: "POLAR DREAD CARRIER", form: "carrier", w: 330, h: 170,
       health: 2940, score: 16000, left: 820, right: 360, cadence: 2.25,
-      color: "#29445d", accent: "#8ff7ff", attacks: ["missiles", "rain", "cross", "fan"],
+      color: "#29445d", accent: "#8ff7ff", attacks: ["bombRun", "deploy", "swoop", "missiles", "bombRun"],
       reward: [3, "health"], checkpoint: 40600, floating: true
     },
     frostTitan: {
       name: "ABSOLUTE ZERO TITAN", form: "titan", w: 305, h: 290,
       health: 4180, score: 24000, left: 850, right: 120, cadence: 2.20,
-      color: "#344657", accent: "#d6fbff", attacks: ["wave", "laser", "summon", "nova", "debris"],
+      color: "#344657", accent: "#d6fbff", attacks: ["iceCharge", "iceField", "avalanche", "laser", "iceCharge"],
       reward: ["health", "special"], checkpoint: 44940, levelEnd: 4
     },
     chronoSerpent: {
@@ -197,7 +197,7 @@
     reignEmperor: {
       name: "IRON REIGN EMPEROR", form: "emperor", w: 340, h: 325,
       health: 5350, score: 36000, left: 920, right: 100, cadence: 2.35,
-      color: "#3b2633", accent: "#ffd75e", attacks: ["summon", "missiles", "nova", "laser", "wave", "spiral", "fan"],
+      color: "#3b2633", accent: "#ffd75e", attacks: ["teleport", "gearWall", "echoes", "missiles", "nova", "teleport", "gearWall"],
       campaignFinal: true
     },
     reignHunter: {
@@ -301,6 +301,7 @@
   let floatingTexts = [];
   let blastEffects = [];
   let bossDeaths = [];
+  let setPieces = [];
   let victoryScene = null;
   let specialAttack = null;
   let debris = [];
@@ -1241,7 +1242,10 @@
       const leftBound = cameraX + 24;
       let rightBound = LEVEL_W - 40;
       if (activeBoss && !activeBoss.dead && activeBoss.arenaLock !== false) {
-        rightBound = Math.min(rightBound, activeBoss.x - 28);
+        const bossBoundary = activeBoss.arenaLock === "arena"
+          ? activeBoss.arenaRight - 40
+          : activeBoss.x - 28;
+        rightBound = Math.min(rightBound, bossBoundary);
       }
       this.x = clamp(this.x, leftBound, Math.max(leftBound, rightBound - this.w));
 
@@ -1542,7 +1546,9 @@
         ? Math.max(checkpointX, activeBoss.arenaLeft + 90)
         : checkpointX;
       const bossLimit = activeBoss && !activeBoss.dead && activeBoss.arenaLock !== false
-        ? activeBoss.x - this.w - 72
+        ? activeBoss.arenaLock === "arena"
+          ? activeBoss.arenaRight - this.w - 72
+          : activeBoss.x - this.w - 72
         : LEVEL_W - this.w - 40;
 
       this.x = clamp(
@@ -2464,14 +2470,23 @@
           this.fireTimer = rand(1.8, 2.4) / Math.sqrt(difficulty);
         }
       } else if (this.type === "brute") {
-        if (distance > 76) this.x += toward * this.speed * dt;
-
-        if (this.fireTimer <= 0 && distance < 620 && canAttackOnScreen) {
-          const lowShot = this.attackMode % 2 !== 0;
-          this.attackMode++;
-          this.shootHorizontal(player, 245, 14, "#ffad45", 12, lowShot);
-          audio.boss();
-          this.fireTimer = rand(2.5, 3.1) / Math.sqrt(difficulty);
+        if (this.chargeTimer > 0) {
+          this.x += toward * this.speed * 2.65 * dt;
+          if (Math.floor(this.chargeTimer * 20) % 3 === 0) burst(this.cx - toward * 18, this.y + this.h - 4, "#8f7962", 1, 70);
+        } else {
+          if (distance > 76) this.x += toward * this.speed * dt;
+          if (this.fireTimer <= 0 && distance < 620 && canAttackOnScreen) {
+            const nextMove = this.attackMode++ % 3;
+            if (nextMove === 2 && distance > 130) {
+              this.chargeTimer = 0.72;
+              audio.tone(92, 0.18, "sawtooth", 0.10, 120);
+            } else {
+              const lowShot = nextMove % 2 !== 0;
+              this.shootHorizontal(player, 245, 14, "#ffad45", 12, lowShot);
+              audio.boss();
+            }
+            this.fireTimer = rand(2.35, 2.9) / Math.sqrt(difficulty);
+          }
         }
       } else if (this.type === "turret") {
         if (this.fireTimer <= 0 && distance < 950 && canAttackOnScreen) {
@@ -2841,13 +2856,16 @@
         ctx.fillStyle = "#13171d"; ctx.beginPath(); ctx.arc(x, 82, 9, 0, Math.PI * 2); ctx.fill();
       }
       bossPolygon([[-120,55],[-88,-12],[-22,-48],[96,-25],[132,48]], body, accent, 7);
-      ctx.save(); ctx.translate(22, -44 + bob); ctx.rotate(-0.08 + Math.sin(phase) * 0.03);
+      ctx.save();
+      ctx.translate(-22, -44 + bob);
+      ctx.scale(-1, 1);
+      ctx.rotate(-0.08 + Math.sin(phase) * 0.03);
       bossPolygon([[-58,15],[-42,-38],[38,-52],[72,-8],[52,30]], "#273641", accent, 6);
       ctx.fillStyle = accent; ctx.fillRect(42, -25, 155, 22);
       ctx.fillStyle = "#1b222b"; ctx.fillRect(180, -30, 35, 32);
       ctx.restore();
       ctx.fillStyle = "#ff9b42"; ctx.fillRect(-118, 24 + bob, 18, 28); ctx.fillRect(-92, 12 - bob, 14, 22);
-      bossEye(8, -62, accent);
+      bossEye(-8, -62, accent);
     } else if (p.form === "gunship") {
       const wing = Math.sin(phase * 2.6) * 8;
       bossPolygon([[-154,8],[-76,-56],[-12,-70],[35,-55],[158,2],[68,26],[28,64],[-80,48]], body, accent, 7);
@@ -3206,7 +3224,11 @@
         fan: ["HUNTER FAN", () => this.fanBurst(), 0.66],
         summon: ["REINFORCEMENTS", () => this.summonMinions(), 0.78],
         missiles: ["MISSILE LOCK", () => this.missileSalvo(), 0.76],
-        nova: ["CORE NOVA", () => this.novaPulse(), 0.82]
+        nova: ["CORE NOVA", () => this.novaPulse(), 0.82],
+        gravity: ["GRAVITY WELL", () => this.gravityWell(), 0.76],
+        stomp: ["GROUND STOMP", () => this.stompAdvance(), 0.62],
+        railRush: ["MAGLEV SWEEP", () => this.railRush(), 0.68],
+        roots: ["ROOT ERUPTION", () => this.rootSurge(), 0.66]
       };
       return attackMap[name] || attackMap.horizontal;
     }
@@ -3367,6 +3389,61 @@
       audio.tone(124, 0.22, "sawtooth", 0.12, 180);
     }
 
+    stompAdvance() {
+      const target = this.target();
+      const direction = target && target.cx < this.cx ? -1 : 1;
+      this.x = clamp(this.x + direction * (105 + this.combatTier * 25), this.arenaLeft + 260, this.arenaRight - this.w - 80);
+      this.baseX = this.x;
+      this.baseY = terrainSurfaceY(this.cx) - this.h;
+      this.y = this.baseY;
+      const groundY = terrainSurfaceY(this.cx) - 8;
+      blastEffects.push(new BlastEffect(this.cx, groundY, this.profile.accent, 2));
+      for (const side of [-1, 1]) {
+        enemyBullets.push(new EnemyBullet(this.cx, groundY - 10, side * (270 + this.combatTier * 45), 0, (15 + this.combatTier * 2) * difficulty, 15, this.profile.accent));
+      }
+      for (const player of players) {
+        const grounded = !player.dead && (player.onGround || player.y + player.h >= terrainSurfaceY(player.cx) - 16);
+        if (grounded && Math.abs(player.cx - this.cx) < 175) player.hit((20 + this.combatTier * 3) * difficulty, player.cx < this.cx ? -1 : 1);
+      }
+      burst(this.cx, groundY, this.profile.accent, 20, 240);
+      audio.crash(1.25 + this.combatTier * 0.12);
+    }
+
+    railRush() {
+      const baseY = terrainSurfaceY((this.arenaLeft + this.arenaRight) * 0.5);
+      const direction = this.attackMode % 2 ? -1 : 1;
+      const startX = direction > 0 ? this.arenaLeft - 320 : this.arenaRight + 60;
+      const endX = direction > 0 ? this.arenaRight + 320 : this.arenaLeft - 320;
+      hazards.push(new RailSweeper(startX, endX, baseY, direction, this.profile.accent, 0.18, 22 + this.combatTier * 2));
+      if (this.combatTier >= 2) {
+        hazards.push(new RailSweeper(direction > 0 ? this.arenaRight + 60 : this.arenaLeft - 320, direction > 0 ? this.arenaLeft - 320 : this.arenaRight + 320, baseY, -direction, "#59ecff", 1.05, 23));
+      }
+      audio.tone(115, 0.34, "sawtooth", 0.13, 170);
+    }
+
+    rootSurge() {
+      const target = this.target();
+      const count = 6 + this.combatTier;
+      const span = this.arenaRight - this.arenaLeft - 180;
+      const safe = target ? clamp(Math.floor((target.cx - this.arenaLeft - 90) / Math.max(1, span) * count), 0, count - 1) : Math.floor(count / 2);
+      for (let i = 0; i < count; i++) {
+        if (i === safe) continue;
+        const x = this.arenaLeft + 90 + span * (i + 0.5) / count;
+        hazards.push(new ArenaEruption(x, "root", this.profile.accent, 0.30 + Math.abs(i - safe) * 0.09, 0.44, 70, 150 + this.combatTier * 12, 18 + this.combatTier * 2));
+      }
+      audio.tone(98, 0.36, "triangle", 0.12, 115);
+    }
+
+    gravityWell() {
+      const centerX = clamp(
+        (this.arenaLeft + this.arenaRight) * 0.5 + (this.attackMode % 2 ? 150 : -150),
+        this.arenaLeft + 230,
+        this.arenaRight - 230
+      );
+      hazards.push(new GravityWell(centerX, terrainSurfaceY(centerX) - 210, this.profile.accent, 2.7 + this.combatTier * 0.25, this.combatTier));
+      audio.tone(58, 0.42, "sawtooth", 0.14, 230);
+    }
+
     novaPulse() {
       const count = 16 + this.combatTier * 2;
       const gap = (this.attackMode * 3) % count;
@@ -3429,6 +3506,893 @@
         ctx.fillText(this.telegraphLabel, 0, -this.h / 2 - 33);
       }
       ctx.restore();
+    }
+  }
+
+
+  class OmegaTank extends StageBoss {
+    constructor(key, x) {
+      super(key, x);
+      this.homeX = x;
+      this.tankAction = null;
+      this.trackSpin = 0;
+      this.bodyPitch = 0;
+      this.plowSide = -1;
+      this.dustTimer = 0;
+      this.stabilizers = 0;
+    }
+
+    attackDefinition(name) {
+      if (name === "ram") return ["RAM", () => this.startRam(), 0.62];
+      if (name === "mortar") return ["MORTARS", () => this.launchSiegeMortars(), 0.72];
+      if (name === "crush") return ["CRUSH", () => this.startHydraulicCrush(), 0.64];
+      return super.attackDefinition(name);
+    }
+
+    update(dt) {
+      if (!this.tankAction) {
+        super.update(dt);
+        if (!this.dead) {
+          this.y = terrainSurfaceY(this.cx) - this.h;
+          this.bodyPitch *= Math.exp(-8 * dt);
+          this.stabilizers *= Math.exp(-7 * dt);
+        }
+        return;
+      }
+      this.updateTankAction(dt);
+    }
+
+    updateTankAction(dt) {
+      this.phase += dt;
+      this.flashTimer = Math.max(0, this.flashTimer - dt);
+      this.phaseShield = Math.max(0, this.phaseShield - dt);
+
+      const healthRatio = clamp(this.health / Math.max(1, this.maxHealth), 0, 1);
+      const nextTier = healthRatio <= 0.34 ? 2 : healthRatio <= 0.68 ? 1 : 0;
+      if (nextTier > this.combatTier) this.enterCombatTier(nextTier);
+
+      const action = this.tankAction;
+      if (action.type === "ram") this.updateRam(action, dt);
+      else if (action.type === "crush") this.updateCrush(action, dt);
+      else if (action.type === "mortar") this.updateMortarRecovery(action, dt);
+
+      this.y = terrainSurfaceY(this.cx) - this.h;
+    }
+
+    startRam() {
+      const extraPass = this.combatTier >= 2 ? 1 : 0;
+      this.tankAction = {
+        type: "ram",
+        mode: "charge",
+        direction: -1,
+        speed: 220,
+        turnsRemaining: extraPass,
+        timer: 0,
+        impactDone: false
+      };
+      this.arenaLock = "arena";
+      this.plowSide = -1;
+      this.dustTimer = 0;
+      audio.tone(78, 0.34, "sawtooth", 0.15, 145);
+    }
+
+    updateRam(action, dt) {
+      if (action.mode === "charge") {
+        const maxSpeed = 720 + this.combatTier * 110;
+        action.speed = Math.min(maxSpeed, action.speed + (1350 + this.combatTier * 210) * dt);
+        this.x += action.direction * action.speed * dt;
+        this.trackSpin += action.direction * action.speed * dt * 0.045;
+        this.bodyPitch += ((action.direction < 0 ? 0.035 : -0.035) - this.bodyPitch) * (1 - Math.exp(-10 * dt));
+        this.plowSide = action.direction;
+        this.dustTimer -= dt;
+        if (this.dustTimer <= 0) {
+          this.dustTimer = 0.045;
+          const dustX = action.direction < 0 ? this.x + this.w - 20 : this.x + 20;
+          burst(dustX, terrainSurfaceY(dustX) - 8, "#8f7962", 2, 95 + action.speed * 0.08);
+        }
+        this.damageWithPlow(action.direction, 24 + this.combatTier * 4);
+
+        const leftEdge = this.arenaLeft + 54;
+        const rightEdge = this.arenaRight - this.w - 54;
+        const reachedEdge = action.direction < 0 ? this.x <= leftEdge : this.x >= rightEdge;
+        if (reachedEdge) {
+          this.x = action.direction < 0 ? leftEdge : rightEdge;
+          this.ramGroundImpact(action.direction);
+          action.mode = "brake";
+          action.timer = 0.22;
+          action.speed *= 0.25;
+          action.impactDone = true;
+        }
+        return;
+      }
+
+      if (action.mode === "brake") {
+        action.timer -= dt;
+        this.bodyPitch *= Math.exp(-11 * dt);
+        if (action.timer > 0) return;
+        if (action.turnsRemaining > 0) {
+          action.turnsRemaining--;
+          action.direction *= -1;
+          action.speed = 250;
+          action.mode = "charge";
+          action.impactDone = false;
+          this.plowSide = action.direction;
+          audio.tone(92, 0.22, "square", 0.12, 110);
+        } else {
+          action.mode = "return";
+        }
+        return;
+      }
+
+      if (action.mode === "return") {
+        let returnX = this.homeX;
+        for (const player of players) {
+          if (!player.dead) returnX = Math.max(returnX, player.x + player.w + 105);
+        }
+        returnX = clamp(returnX, this.arenaLeft + 260, this.arenaRight - this.w - 35);
+        const dx = returnX - this.x;
+        const speed = 600 + this.combatTier * 65;
+        const step = clamp(dx, -speed * dt, speed * dt);
+        this.x += step;
+        this.trackSpin += Math.sign(step || 1) * Math.abs(step) * 0.045;
+        this.bodyPitch *= Math.exp(-9 * dt);
+        if (Math.abs(dx) <= 5) {
+          this.x = returnX;
+          this.homeX = Math.max(this.homeX, returnX);
+          this.finishTankAction(1.05);
+        }
+      }
+    }
+
+    damageWithPlow(direction, damage) {
+      const plowLeft = direction < 0 ? this.x - 52 : this.x + this.w - 38;
+      const plowRight = direction < 0 ? this.x + 55 : this.x + this.w + 52;
+      const plowTop = this.y + this.h * 0.57;
+      const plowBottom = this.y + this.h + 12;
+
+      for (const player of players) {
+        if (player.dead) continue;
+        const overlaps = player.x < plowRight && player.x + player.w > plowLeft &&
+          player.y < plowBottom && player.y + player.h > plowTop;
+        if (!overlaps) continue;
+        player.hit(damage * difficulty, direction);
+        player.knockbackX = direction * (330 + this.combatTier * 45);
+        burst(player.cx, player.y + player.h * 0.72, this.profile.accent, 9, 210);
+        audio.impact(1.45, "metal");
+      }
+    }
+
+    ramGroundImpact(direction) {
+      const impactX = direction < 0 ? this.x : this.x + this.w;
+      const groundY = terrainSurfaceY(impactX) - 7;
+      burst(impactX, groundY, this.profile.accent, 24, 285);
+      blastEffects.push(new BlastEffect(impactX, groundY, this.profile.accent, 2));
+      const waves = 2 + this.combatTier;
+      for (let i = 0; i < waves; i++) {
+        const speed = 285 + i * 65;
+        enemyBullets.push(new EnemyBullet(impactX, groundY - 10, -speed, 0, (14 + this.combatTier * 2) * difficulty, 14, this.profile.accent));
+        enemyBullets.push(new EnemyBullet(impactX, groundY - 10, speed, 0, (14 + this.combatTier * 2) * difficulty, 14, this.profile.accent));
+      }
+      audio.crash(1.35 + this.combatTier * 0.15);
+      impactFeedback(0.07);
+    }
+
+    launchSiegeMortars() {
+      const living = players.filter(player => !player.dead);
+      const count = 3 + this.combatTier * 2 + (coop ? 1 : 0);
+      for (let i = 0; i < count; i++) {
+        const target = living[i % Math.max(1, living.length)] || this.target();
+        const prediction = target ? target.cx + target.vx * (0.45 + i * 0.04) : this.arenaLeft + 260;
+        const spread = (i - (count - 1) / 2) * (78 - this.combatTier * 8);
+        const targetX = clamp(prediction + spread, this.arenaLeft + 95, this.arenaRight - 95);
+        debris.push(new SiegeMortar(
+          this.cx - 82,
+          this.y + 42,
+          targetX,
+          this.profile.accent,
+          i * 0.13,
+          this.combatTier
+        ));
+      }
+      this.tankAction = { type: "mortar", timer: 0.88 + this.combatTier * 0.08 };
+      this.stabilizers = 1;
+      audio.tone(122, 0.26, "sawtooth", 0.13, 195);
+    }
+
+    updateMortarRecovery(action, dt) {
+      action.timer -= dt;
+      this.stabilizers = Math.min(1, this.stabilizers + dt * 5);
+      this.bodyPitch = Math.sin(this.phase * 22) * 0.018;
+      if (action.timer <= 0) this.finishTankAction(0.82);
+    }
+
+    startHydraulicCrush() {
+      this.tankAction = { type: "crush", mode: "rear", timer: 0.48, slammed: false };
+      this.arenaLock = true;
+      audio.tone(88, 0.30, "sawtooth", 0.13, 90);
+    }
+
+    updateCrush(action, dt) {
+      action.timer -= dt;
+      if (action.mode === "rear") {
+        this.bodyPitch += (0.18 - this.bodyPitch) * (1 - Math.exp(-8 * dt));
+        this.stabilizers = Math.min(1, this.stabilizers + dt * 4);
+        if (action.timer <= 0) {
+          action.mode = "slam";
+          action.timer = 0.16;
+          this.bodyPitch = -0.10;
+          this.executeHydraulicCrush();
+        }
+        return;
+      }
+      if (action.mode === "slam") {
+        this.bodyPitch += (0 - this.bodyPitch) * (1 - Math.exp(-15 * dt));
+        if (action.timer <= 0) {
+          action.mode = "recover";
+          action.timer = 0.46;
+        }
+        return;
+      }
+      this.bodyPitch *= Math.exp(-9 * dt);
+      this.stabilizers *= Math.exp(-6 * dt);
+      if (action.timer <= 0) this.finishTankAction(0.92);
+    }
+
+    executeHydraulicCrush() {
+      const impactX = this.x - 38;
+      const groundY = terrainSurfaceY(impactX) - 6;
+      burst(impactX, groundY, this.profile.accent, 30, 310);
+      blastEffects.push(new BlastEffect(impactX, groundY, this.profile.accent, 3));
+      const waveCount = 3 + this.combatTier;
+      for (let i = 0; i < waveCount; i++) {
+        const speed = 250 + i * 58;
+        enemyBullets.push(new EnemyBullet(impactX, groundY - 10, -speed, 0, (15 + this.combatTier * 2) * difficulty, 15, this.profile.accent));
+      }
+      for (const player of players) {
+        if (player.dead) continue;
+        const grounded = player.onGround || player.y + player.h >= terrainSurfaceY(player.cx) - 18;
+        if (grounded && Math.abs(player.cx - impactX) < 250) player.hit((22 + this.combatTier * 3) * difficulty, -1);
+      }
+      const debrisCount = 2 + this.combatTier;
+      for (let i = 0; i < debrisCount; i++) {
+        const x = clamp(impactX - 110 + i * 110, this.arenaLeft + 60, this.arenaRight - 60);
+        debris.push(new FallingDebris(x, cameraY - 80 - i * 35, 30 + i * 4, true));
+      }
+      audio.crash(1.65);
+      impactFeedback(0.09);
+    }
+
+    finishTankAction(nextAttackDelay) {
+      this.tankAction = null;
+      this.arenaLock = true;
+      this.plowSide = -1;
+      this.bodyPitch = 0;
+      this.stabilizers = 0;
+      this.attackTimer = Math.max(this.attackTimer, nextAttackDelay);
+    }
+
+    draw() {
+      const warning = this.telegraphTimer > 0 && Math.floor(this.telegraphTimer * 10) % 2 === 0;
+      ctx.save();
+      ctx.translate(this.cx, this.cy);
+      ctx.rotate(this.bodyPitch);
+      if (this.flashTimer > 0) ctx.globalAlpha = 0.62;
+      drawBossForm(this.profile, this.phase, warning);
+      ctx.globalAlpha = 1;
+
+      const side = this.plowSide < 0 ? -1 : 1;
+      ctx.save();
+      ctx.scale(side < 0 ? 1 : -1, 1);
+      bossPolygon([[-128,40],[-176,18],[-202,60],[-188,111],[-126,104]], "#202932", this.profile.accent, 5);
+      ctx.fillStyle = "#10161d";
+      ctx.fillRect(-190, 48, 48, 14);
+      ctx.restore();
+
+      ctx.globalAlpha = 0.65;
+      ctx.fillStyle = this.profile.accent;
+      for (let i = 0; i < 5; i++) {
+        const offset = ((i * 52 + this.trackSpin * 12) % 260) - 130;
+        ctx.fillRect(offset, 118, 22, 5);
+      }
+      ctx.globalAlpha = 1;
+
+      if (this.stabilizers > 0.04) {
+        const extension = 42 * this.stabilizers;
+        ctx.strokeStyle = this.profile.accent;
+        ctx.lineWidth = 9;
+        ctx.beginPath();
+        ctx.moveTo(-82, 78); ctx.lineTo(-112, 104 + extension);
+        ctx.moveTo(82, 78); ctx.lineTo(112, 104 + extension);
+        ctx.stroke();
+        ctx.fillStyle = "#182029";
+        ctx.fillRect(-132, 100 + extension, 42, 10);
+        ctx.fillRect(90, 100 + extension, 42, 10);
+      }
+
+      if (this.telegraphLabel) {
+        ctx.font = `900 13px ${UI_FONT}`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        const labelWidth = ctx.measureText(this.telegraphLabel).width + 14;
+        ctx.fillStyle = "#12070a";
+        ctx.fillRect(-labelWidth / 2, -this.h / 2 - 43, labelWidth, 20);
+        ctx.strokeStyle = this.profile.accent;
+        ctx.lineWidth = 3;
+        ctx.strokeRect(-labelWidth / 2, -this.h / 2 - 43, labelWidth, 20);
+        ctx.fillStyle = "#fff36d";
+        ctx.fillText(this.telegraphLabel, 0, -this.h / 2 - 33);
+      }
+      ctx.restore();
+    }
+  }
+
+
+  class AegisGunshipBoss extends StageBoss {
+    constructor(key, x) {
+      super(key, x);
+      this.arenaLock = "arena";
+      this.flightAction = null;
+      this.roll = 0;
+      this.dropTimer = 0;
+      this.contactTimer = 0;
+    }
+
+    attackDefinition(name) {
+      if (name === "swoop") return ["DIVE PATH", () => this.startSwoop(), 0.58];
+      if (name === "bombRun") return ["BOMB RUN", () => this.startBombRun(), 0.64];
+      if (name === "deploy") return ["WINGMEN", () => this.deployWingmen(), 0.56];
+      return super.attackDefinition(name);
+    }
+
+    update(dt) {
+      if (this.flightAction) {
+        this.updateFlightAction(dt);
+        return;
+      }
+      super.update(dt);
+      if (this.dead || this.introTimer > 0) return;
+      const target = this.target();
+      if (!target) return;
+      const desiredX = clamp(target.cx + 470, this.arenaLeft + 220, this.arenaRight - this.w - 70);
+      this.x += (desiredX - this.x) * (1 - Math.exp(-1.9 * dt));
+      this.baseY = terrainSurfaceY(this.cx) - this.h - 205;
+      this.roll *= Math.exp(-7 * dt);
+    }
+
+    startSwoop() {
+      const target = this.target();
+      const direction = target && target.cx > (this.arenaLeft + this.arenaRight) * 0.5 ? 1 : -1;
+      const startX = direction < 0 ? this.arenaRight - this.w - 40 : this.arenaLeft + 40;
+      const endX = direction < 0 ? this.arenaLeft + 50 : this.arenaRight - this.w - 50;
+      const highY = Math.max(cameraY + 120, terrainSurfaceY(startX + this.w / 2) - this.h - 320);
+      this.flightAction = { type: "swoop", time: 0, duration: 1.48, direction, startX, endX, highY };
+      this.contactTimer = 0;
+      this.arenaLock = "arena";
+      audio.tone(102, 0.32, "sawtooth", 0.14, 260);
+    }
+
+    startBombRun() {
+      const direction = this.attackMode % 2 ? -1 : 1;
+      const startX = direction > 0 ? this.arenaLeft - this.w - 80 : this.arenaRight + 80;
+      const endX = direction > 0 ? this.arenaRight + 80 : this.arenaLeft - this.w - 80;
+      this.x = startX;
+      this.y = Math.max(cameraY + 115, terrainSurfaceY(this.cx) - this.h - 275);
+      this.flightAction = { type: "bombRun", time: 0, duration: 2.05, direction, startX, endX };
+      this.dropTimer = 0.08;
+      this.arenaLock = "arena";
+      audio.tone(148, 0.25, "square", 0.11, 170);
+    }
+
+    deployWingmen() {
+      const types = campaignLevel >= 4
+        ? (this.combatTier >= 2 ? ["jet", "bomber", "jet"] : ["bomber", "jet"])
+        : (this.combatTier >= 2 ? ["jet", "drone", "jet"] : ["drone", "jet"]);
+      types.forEach((type, index) => {
+        const x = clamp(this.cx - 80 + index * 105, this.arenaLeft + 120, this.arenaRight - 120);
+        const y = clamp(this.cy - 55 - index * 26, 150, terrainSurfaceY(x) - 210);
+        spawn(type, x, y);
+        burst(x, y, this.profile.accent, 8, 135);
+      });
+      const target = this.target();
+      if (target) hazards.push(new ArenaEruption(target.cx, "plasma", this.profile.accent, 0.62, 0.34, 72, 132, 18 + this.combatTier * 2));
+      audio.tone(260, 0.16, "square", 0.10, 150);
+    }
+
+    updateFlightAction(dt) {
+      this.phase += dt;
+      this.flashTimer = Math.max(0, this.flashTimer - dt);
+      this.contactTimer = Math.max(0, this.contactTimer - dt);
+      const action = this.flightAction;
+      action.time += dt;
+      const p = clamp(action.time / action.duration, 0, 1);
+      const eased = p * p * (3 - 2 * p);
+      this.x = action.startX + (action.endX - action.startX) * eased;
+
+      if (action.type === "swoop") {
+        const dive = Math.sin(Math.PI * p);
+        const ground = terrainSurfaceY(this.cx) - this.h - 42;
+        this.y = action.highY + (ground - action.highY) * dive;
+        this.roll = action.direction * (0.18 - Math.abs(0.5 - p) * 0.22);
+        if (this.contactTimer <= 0) {
+          for (const player of players) {
+            if (!player.dead && this.overlaps(player)) {
+              player.hit((22 + this.combatTier * 3) * difficulty, action.direction);
+              player.knockbackX = action.direction * 280;
+              this.contactTimer = 0.35;
+              audio.impact(1.3, "metal");
+            }
+          }
+        }
+      } else {
+        this.y = Math.max(cameraY + 110, terrainSurfaceY(this.cx) - this.h - 275 + Math.sin(p * Math.PI * 3) * 22);
+        this.dropTimer -= dt;
+        if (this.dropTimer <= 0 && p < 0.90) {
+          this.dropTimer = Math.max(0.20, 0.32 - this.combatTier * 0.04);
+          const target = this.target();
+          const leadX = target ? target.cx + target.vx * 0.42 : this.cx;
+          const targetX = clamp(leadX + rand(-110, 110), this.arenaLeft + 80, this.arenaRight - 80);
+          debris.push(new SiegeMortar(this.cx, this.cy + 24, targetX, this.profile.accent, 0, this.combatTier));
+        }
+      }
+
+      if (p >= 1) {
+        this.flightAction = null;
+        this.roll = 0;
+        const target = this.target();
+        this.x = clamp(target ? target.cx + 470 : this.arenaRight - this.w - 80, this.arenaLeft + 220, this.arenaRight - this.w - 70);
+        this.baseY = terrainSurfaceY(this.cx) - this.h - 205;
+        this.y = this.baseY;
+        this.attackTimer = Math.max(this.attackTimer, 0.88);
+      }
+    }
+
+    draw() {
+      ctx.save();
+      ctx.translate(this.cx, this.cy);
+      ctx.rotate(this.roll);
+      if (this.flashTimer > 0) ctx.globalAlpha = 0.62;
+      drawBossForm(this.profile, this.phase, this.telegraphTimer > 0 && Math.floor(this.telegraphTimer * 10) % 2 === 0);
+      ctx.restore();
+      if (!this.flightAction && this.telegraphLabel) {
+        ctx.save();
+        ctx.font = `900 13px ${UI_FONT}`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        const labelWidth = ctx.measureText(this.telegraphLabel).width + 14;
+        ctx.fillStyle = "#12070a";
+        ctx.fillRect(this.cx - labelWidth / 2, this.y - 43, labelWidth, 20);
+        ctx.strokeStyle = this.profile.accent;
+        ctx.lineWidth = 3;
+        ctx.strokeRect(this.cx - labelWidth / 2, this.y - 43, labelWidth, 20);
+        ctx.fillStyle = "#fff36d";
+        ctx.fillText(this.telegraphLabel, this.cx, this.y - 33);
+        ctx.restore();
+      }
+    }
+  }
+
+  class BioLeviathanBoss extends StageBoss {
+    constructor(key, x) {
+      super(key, x);
+      this.arenaLock = "arena";
+      this.beastAction = null;
+      this.hidden = false;
+      this.alpha = 1;
+      this.contactTimer = 0;
+    }
+
+    attackDefinition(name) {
+      if (name === "burrow") return ["UNDERGROUND", () => this.startBurrow(), 0.56];
+      if (name === "rootWall") return ["ROOT SURGE", () => this.rootWall(), 0.62];
+      if (name === "devour") return ["DEVOUR", () => this.startDevour(), 0.58];
+      return super.attackDefinition(name);
+    }
+
+    update(dt) {
+      if (this.beastAction) {
+        this.updateBeastAction(dt);
+        return;
+      }
+      super.update(dt);
+      if (!this.dead) {
+        this.y = terrainSurfaceY(this.cx) - this.h + Math.sin(this.phase * 1.2) * 5;
+        this.alpha = 1;
+      }
+    }
+
+    hit(damage, owner) {
+      if (this.hidden) return;
+      super.hit(damage, owner);
+    }
+
+    startBurrow() {
+      const target = this.target();
+      const targetX = clamp(target ? target.cx : (this.arenaLeft + this.arenaRight) * 0.5, this.arenaLeft + 150, this.arenaRight - 150);
+      this.beastAction = { type: "burrow", mode: "sink", timer: 0.34, targetX, erupted: false };
+      this.arenaLock = "arena";
+      audio.tone(72, 0.34, "sawtooth", 0.14, -24);
+    }
+
+    rootWall() {
+      const target = this.target();
+      const count = 7 + this.combatTier;
+      const usable = this.arenaRight - this.arenaLeft - 220;
+      let safe = 0;
+      if (target) safe = clamp(Math.floor((target.cx - this.arenaLeft - 110) / Math.max(1, usable) * count), 0, count - 1);
+      for (let i = 0; i < count; i++) {
+        if (Math.abs(i - safe) <= 0) continue;
+        const x = this.arenaLeft + 110 + usable * (i + 0.5) / count;
+        hazards.push(new ArenaEruption(x, "root", this.profile.accent, 0.34 + i * 0.075, 0.48, 74, 170 + this.combatTier * 15, 19 + this.combatTier * 2));
+      }
+      audio.tone(96, 0.42, "triangle", 0.13, 120);
+    }
+
+    startDevour() {
+      const target = this.target();
+      const direction = target && target.cx < this.cx ? -1 : 1;
+      this.beastAction = { type: "devour", mode: "charge", direction, speed: 210, timer: 0, turn: this.combatTier >= 2 };
+      this.contactTimer = 0;
+      this.arenaLock = "arena";
+      audio.tone(64, 0.38, "sawtooth", 0.15, 130);
+    }
+
+    updateBeastAction(dt) {
+      this.phase += dt;
+      this.flashTimer = Math.max(0, this.flashTimer - dt);
+      this.contactTimer = Math.max(0, this.contactTimer - dt);
+      const action = this.beastAction;
+
+      if (action.type === "burrow") {
+        action.timer -= dt;
+        if (action.mode === "sink") {
+          this.alpha = clamp(action.timer / 0.34, 0, 1);
+          this.y += 260 * dt;
+          if (action.timer <= 0) {
+            action.mode = "underground";
+            action.timer = 0.78;
+            this.hidden = true;
+            this.alpha = 0;
+            this.x = action.targetX - this.w / 2;
+          }
+          return;
+        }
+        if (action.mode === "underground") {
+          if (action.timer <= 0.16 && !action.erupted) {
+            action.erupted = true;
+            action.mode = "emerge";
+            action.timer = 0.36;
+            this.hidden = false;
+            this.y = terrainSurfaceY(this.cx) + 55;
+            const groundY = terrainSurfaceY(this.cx) - 8;
+            blastEffects.push(new BlastEffect(this.cx, groundY, this.profile.accent, 3));
+            burst(this.cx, groundY, this.profile.accent, 30, 300);
+            for (const player of players) {
+              if (!player.dead && Math.abs(player.cx - this.cx) < 145 && player.y + player.h > groundY - 170) {
+                player.hit((24 + this.combatTier * 3) * difficulty, player.cx < this.cx ? -1 : 1);
+              }
+            }
+            for (const direction of [-1, 1]) {
+              enemyBullets.push(new EnemyBullet(this.cx, groundY - 12, direction * (300 + this.combatTier * 45), 0, (16 + this.combatTier * 2) * difficulty, 15, this.profile.accent));
+            }
+            audio.crash(1.65);
+          }
+          return;
+        }
+        this.alpha = 1 - clamp(action.timer / 0.36, 0, 1);
+        this.y += (terrainSurfaceY(this.cx) - this.h - this.y) * (1 - Math.exp(-14 * dt));
+        if (action.timer <= 0) this.finishBeastAction(0.86);
+        return;
+      }
+
+      if (action.type === "devour") {
+        action.speed = Math.min(680 + this.combatTier * 80, action.speed + (1150 + this.combatTier * 180) * dt);
+        this.x += action.direction * action.speed * dt;
+        this.y = terrainSurfaceY(this.cx) - this.h;
+        if (this.contactTimer <= 0) {
+          for (const player of players) {
+            if (!player.dead && this.overlaps(player)) {
+              player.hit((25 + this.combatTier * 3) * difficulty, action.direction);
+              player.knockbackX = action.direction * 320;
+              this.contactTimer = 0.35;
+              audio.impact(1.5, "metal");
+            }
+          }
+        }
+        const edge = action.direction < 0 ? this.arenaLeft + 45 : this.arenaRight - this.w - 45;
+        const reached = action.direction < 0 ? this.x <= edge : this.x >= edge;
+        if (reached) {
+          this.x = edge;
+          const groundY = terrainSurfaceY(this.cx) - 8;
+          burst(this.cx, groundY, this.profile.accent, 24, 260);
+          if (action.turn) {
+            action.turn = false;
+            action.direction *= -1;
+            action.speed = 260;
+            audio.tone(82, 0.22, "square", 0.11, 90);
+          } else {
+            this.finishBeastAction(0.92);
+          }
+        }
+      }
+    }
+
+    finishBeastAction(delay) {
+      this.beastAction = null;
+      this.hidden = false;
+      this.alpha = 1;
+      this.y = terrainSurfaceY(this.cx) - this.h;
+      this.attackTimer = Math.max(this.attackTimer, delay);
+    }
+
+    draw() {
+      if (this.hidden) {
+        const ground = terrainSurfaceY(this.cx);
+        ctx.save();
+        ctx.strokeStyle = this.profile.accent;
+        ctx.lineWidth = 6;
+        ctx.globalAlpha = 0.65 + Math.sin(time * 15) * 0.2;
+        ctx.beginPath();
+        ctx.ellipse(this.cx, ground - 4, 105, 22, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = "#fff36d";
+        ctx.fillRect(this.cx - 20, ground - 18, 40, 7);
+        ctx.restore();
+        return;
+      }
+      ctx.save();
+      ctx.globalAlpha = this.alpha;
+      ctx.translate(this.cx, this.cy);
+      if (this.flashTimer > 0) ctx.globalAlpha *= 0.62;
+      drawBossForm(this.profile, this.phase, this.telegraphTimer > 0 && Math.floor(this.telegraphTimer * 10) % 2 === 0);
+      ctx.restore();
+      if (!this.beastAction && this.telegraphLabel) {
+        ctx.save();
+        ctx.font = `900 13px ${UI_FONT}`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        const labelWidth = ctx.measureText(this.telegraphLabel).width + 14;
+        ctx.fillStyle = "#12070a";
+        ctx.fillRect(this.cx - labelWidth / 2, this.y - 43, labelWidth, 20);
+        ctx.strokeStyle = this.profile.accent;
+        ctx.lineWidth = 3;
+        ctx.strokeRect(this.cx - labelWidth / 2, this.y - 43, labelWidth, 20);
+        ctx.fillStyle = "#fff36d";
+        ctx.fillText(this.telegraphLabel, this.cx, this.y - 33);
+        ctx.restore();
+      }
+    }
+  }
+
+  class FrostTitanBoss extends StageBoss {
+    constructor(key, x) {
+      super(key, x);
+      this.arenaLock = "arena";
+      this.iceAction = null;
+      this.contactTimer = 0;
+      this.stepTimer = 0;
+    }
+
+    attackDefinition(name) {
+      if (name === "iceCharge") return ["ICEBREAKER", () => this.startIceCharge(), 0.60];
+      if (name === "iceField") return ["FROST LINE", () => this.iceField(), 0.64];
+      if (name === "avalanche") return ["AVALANCHE", () => this.avalanche(), 0.70];
+      return super.attackDefinition(name);
+    }
+
+    update(dt) {
+      if (this.iceAction) {
+        this.updateIceAction(dt);
+        return;
+      }
+      super.update(dt);
+      if (!this.dead) this.y = terrainSurfaceY(this.cx) - this.h;
+    }
+
+    startIceCharge() {
+      const target = this.target();
+      const direction = target && target.cx < this.cx ? -1 : 1;
+      this.iceAction = { direction, speed: 190, turn: this.combatTier >= 2 };
+      this.contactTimer = 0;
+      this.stepTimer = 0;
+      this.arenaLock = "arena";
+      audio.tone(78, 0.38, "sawtooth", 0.14, 175);
+    }
+
+    iceField() {
+      const target = this.target();
+      const count = 8 + this.combatTier;
+      const span = this.arenaRight - this.arenaLeft - 180;
+      const safe = target ? clamp(Math.floor((target.cx - this.arenaLeft - 90) / Math.max(1, span) * count), 0, count - 1) : Math.floor(count / 2);
+      for (let i = 0; i < count; i++) {
+        if (Math.abs(i - safe) <= 0) continue;
+        const x = this.arenaLeft + 90 + span * (i + 0.5) / count;
+        hazards.push(new ArenaEruption(x, "ice", this.profile.accent, 0.30 + Math.abs(i - safe) * 0.07, 0.50, 70, 155 + this.combatTier * 18, 19 + this.combatTier * 2));
+      }
+      audio.tone(410, 0.28, "triangle", 0.11, -180);
+    }
+
+    avalanche() {
+      const living = players.filter(player => !player.dead);
+      const count = 5 + this.combatTier * 2 + (coop ? 1 : 0);
+      for (let i = 0; i < count; i++) {
+        const target = living[i % Math.max(1, living.length)] || this.target();
+        const x = clamp((target ? target.cx : this.cx) + (i - (count - 1) / 2) * 92, this.arenaLeft + 70, this.arenaRight - 70);
+        debris.push(new FallingDebris(x, cameraY - 120 - i * 30, 34 + (i % 3) * 8, true));
+      }
+      hazards.push(new ArenaEruption(clamp(this.target()?.cx || this.cx, this.arenaLeft + 120, this.arenaRight - 120), "ice", this.profile.accent, 0.78, 0.46, 92, 190, 22));
+      audio.tone(118, 0.32, "sawtooth", 0.12, -70);
+    }
+
+    updateIceAction(dt) {
+      this.phase += dt;
+      this.flashTimer = Math.max(0, this.flashTimer - dt);
+      this.contactTimer = Math.max(0, this.contactTimer - dt);
+      const action = this.iceAction;
+      action.speed = Math.min(620 + this.combatTier * 75, action.speed + (980 + this.combatTier * 150) * dt);
+      this.x += action.direction * action.speed * dt;
+      this.y = terrainSurfaceY(this.cx) - this.h;
+      this.stepTimer -= dt;
+      if (this.stepTimer <= 0) {
+        this.stepTimer = 0.24;
+        const trailX = action.direction > 0 ? this.x + 25 : this.x + this.w - 25;
+        hazards.push(new ArenaEruption(trailX, "ice", this.profile.accent, 0.34, 0.34, 56, 105, 15 + this.combatTier));
+        burst(trailX, terrainSurfaceY(trailX) - 8, "#d6fbff", 5, 110);
+      }
+      if (this.contactTimer <= 0) {
+        for (const player of players) {
+          if (!player.dead && this.overlaps(player)) {
+            player.hit((24 + this.combatTier * 3) * difficulty, action.direction);
+            player.knockbackX = action.direction * 300;
+            this.contactTimer = 0.34;
+            audio.impact(1.45, "metal");
+          }
+        }
+      }
+      const edge = action.direction < 0 ? this.arenaLeft + 55 : this.arenaRight - this.w - 55;
+      const reached = action.direction < 0 ? this.x <= edge : this.x >= edge;
+      if (reached) {
+        this.x = edge;
+        const impactX = action.direction < 0 ? this.x : this.x + this.w;
+        hazards.push(new ArenaEruption(impactX, "ice", this.profile.accent, 0.05, 0.46, 100, 205, 22 + this.combatTier * 2));
+        blastEffects.push(new BlastEffect(impactX, terrainSurfaceY(impactX) - 20, this.profile.accent, 2));
+        audio.crash(1.5);
+        if (action.turn) {
+          action.turn = false;
+          action.direction *= -1;
+          action.speed = 230;
+        } else {
+          this.iceAction = null;
+          this.attackTimer = Math.max(this.attackTimer, 0.92);
+        }
+      }
+    }
+  }
+
+  class ReignEmperorBoss extends StageBoss {
+    constructor(key, x) {
+      super(key, x);
+      this.arenaLock = "arena";
+      this.emperorAction = null;
+      this.alpha = 1;
+      this.slashTimer = 0;
+    }
+
+    attackDefinition(name) {
+      if (name === "teleport") return ["PHASE CUT", () => this.startTeleportStrike(), 0.54];
+      if (name === "gearWall") return ["CLOCK WALL", () => this.gearWall(), 0.66];
+      if (name === "echoes") return ["TIME ECHOES", () => this.timeEchoes(), 0.62];
+      return super.attackDefinition(name);
+    }
+
+    update(dt) {
+      if (this.emperorAction) {
+        this.updateEmperorAction(dt);
+        return;
+      }
+      super.update(dt);
+      this.alpha = 1;
+      this.slashTimer = Math.max(0, this.slashTimer - dt);
+      if (!this.dead) this.y = terrainSurfaceY(this.cx) - this.h;
+    }
+
+    startTeleportStrike() {
+      const target = this.target();
+      const side = target && target.cx < (this.arenaLeft + this.arenaRight) * 0.5 ? 1 : -1;
+      const destination = clamp((target ? target.cx : this.cx) + side * 210, this.arenaLeft + 100, this.arenaRight - this.w - 100);
+      this.emperorAction = { mode: "vanish", timer: 0.28, destination, struck: false };
+      this.arenaLock = "arena";
+      audio.tone(540, 0.20, "square", 0.10, -300);
+    }
+
+    gearWall() {
+      const base = terrainSurfaceY((this.arenaLeft + this.arenaRight) * 0.5);
+      hazards.push(new ClockworkSweeper(this.arenaLeft - 90, this.arenaRight + 90, base, 1, "low", this.profile.accent, 0.18, 21 + this.combatTier * 2));
+      hazards.push(new ClockworkSweeper(this.arenaRight + 90, this.arenaLeft - 90, base, -1, "high", "#ff8df4", 0.92, 19 + this.combatTier * 2));
+      if (this.combatTier >= 2) hazards.push(new ClockworkSweeper(this.arenaLeft - 90, this.arenaRight + 90, base, 1, "low", "#63e5ff", 1.58, 22));
+      audio.tone(170, 0.30, "sawtooth", 0.12, 110);
+    }
+
+    timeEchoes() {
+      const positions = [0.24, 0.50, 0.76];
+      positions.forEach((share, index) => {
+        const x = this.arenaLeft + (this.arenaRight - this.arenaLeft) * share;
+        const y = terrainSurfaceY(x) - this.h - (index === 1 ? 70 : 20);
+        debris.push(new TimeEcho(x, y, this.profile, index * 0.28, 13 + this.combatTier * 2));
+      });
+      audio.tone(360, 0.28, "triangle", 0.11, 210);
+    }
+
+    updateEmperorAction(dt) {
+      this.phase += dt;
+      this.flashTimer = Math.max(0, this.flashTimer - dt);
+      const action = this.emperorAction;
+      action.timer -= dt;
+      if (action.mode === "vanish") {
+        this.alpha = clamp(action.timer / 0.28, 0, 1);
+        if (action.timer <= 0) {
+          this.x = action.destination;
+          this.y = terrainSurfaceY(this.cx) - this.h;
+          action.mode = "strike";
+          action.timer = 0.22;
+          this.alpha = 1;
+          this.slashTimer = 0.22;
+          const facing = this.target() && this.target().cx < this.cx ? -1 : 1;
+          const left = facing < 0 ? this.x - 170 : this.x + this.w - 20;
+          const right = facing < 0 ? this.x + 20 : this.x + this.w + 170;
+          const top = this.y + 50;
+          const bottom = this.y + this.h + 35;
+          for (const player of players) {
+            if (!player.dead && player.x < right && player.x + player.w > left && player.y < bottom && player.y + player.h > top) {
+              player.hit((27 + this.combatTier * 3) * difficulty, facing);
+              player.knockbackX = facing * 340;
+            }
+          }
+          blastEffects.push(new BlastEffect(facing < 0 ? this.x : this.x + this.w, this.cy, this.profile.accent, 2));
+          audio.tone(92, 0.18, "sawtooth", 0.14, 310);
+        }
+        return;
+      }
+      if (action.mode === "strike" && action.timer <= 0) {
+        action.mode = "recover";
+        action.timer = 0.32;
+      } else if (action.mode === "recover" && action.timer <= 0) {
+        this.emperorAction = null;
+        this.slashTimer = 0;
+        this.attackTimer = Math.max(this.attackTimer, 0.78);
+      }
+    }
+
+    draw() {
+      ctx.save();
+      ctx.globalAlpha = this.alpha;
+      ctx.translate(this.cx, this.cy);
+      if (this.flashTimer > 0) ctx.globalAlpha *= 0.62;
+      drawBossForm(this.profile, this.phase, this.telegraphTimer > 0 && Math.floor(this.telegraphTimer * 10) % 2 === 0);
+      if (this.slashTimer > 0) {
+        const facing = this.target() && this.target().cx < this.cx ? -1 : 1;
+        ctx.strokeStyle = "#fff36d";
+        ctx.lineWidth = 18;
+        ctx.globalAlpha = clamp(this.slashTimer / 0.22, 0, 1);
+        ctx.beginPath();
+        ctx.arc(facing * 35, 15, 150, facing < 0 ? Math.PI * 0.55 : -Math.PI * 0.45, facing < 0 ? Math.PI * 1.45 : Math.PI * 0.45);
+        ctx.stroke();
+      }
+      ctx.restore();
+      if (!this.emperorAction && this.telegraphLabel) {
+        ctx.save();
+        ctx.font = `900 13px ${UI_FONT}`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        const labelWidth = ctx.measureText(this.telegraphLabel).width + 14;
+        ctx.fillStyle = "#12070a";
+        ctx.fillRect(this.cx - labelWidth / 2, this.y - 43, labelWidth, 20);
+        ctx.strokeStyle = this.profile.accent;
+        ctx.lineWidth = 3;
+        ctx.strokeRect(this.cx - labelWidth / 2, this.y - 43, labelWidth, 20);
+        ctx.fillStyle = "#fff36d";
+        ctx.fillText(this.telegraphLabel, this.cx, this.y - 33);
+        ctx.restore();
+      }
     }
   }
 
@@ -4272,6 +5236,487 @@
     }
   }
 
+
+  class SiegeMortar extends Entity {
+    constructor(originX, originY, targetX, color, delay = 0, tier = 0) {
+      super(originX - 11, originY - 11, 22, 22);
+      this.startX = originX;
+      this.startY = originY;
+      this.targetX = targetX;
+      this.targetY = terrainSurfaceY(targetX) - 9;
+      this.color = color;
+      this.delay = delay;
+      this.flight = 0;
+      this.flightDuration = Math.max(0.56, 0.76 - tier * 0.07);
+      this.arcHeight = 245 + tier * 35;
+      this.radius = 76 + tier * 10;
+      this.damage = (19 + tier * 3) * difficulty;
+      this.tier = tier;
+      this.dead = false;
+    }
+
+    update(dt) {
+      if (this.delay > 0) {
+        this.delay -= dt;
+        return;
+      }
+
+      this.flight += dt;
+      const t = clamp(this.flight / this.flightDuration, 0, 1);
+      const x = this.startX + (this.targetX - this.startX) * t;
+      const y = this.startY + (this.targetY - this.startY) * t - Math.sin(Math.PI * t) * this.arcHeight;
+      this.x = x - this.w / 2;
+      this.y = y - this.h / 2;
+
+      if (t < 1) return;
+      this.dead = true;
+      explode(this.targetX, this.targetY, this.color, 18 + this.tier * 4, true, 1);
+      blastEffects.push(new BlastEffect(this.targetX, this.targetY, this.color, this.tier >= 2 ? 2 : 1));
+      for (const player of players) {
+        if (player.dead) continue;
+        const distance = Math.hypot(player.cx - this.targetX, player.cy - this.targetY);
+        if (distance <= this.radius) player.hit(this.damage, player.cx < this.targetX ? -1 : 1);
+      }
+      const groundY = terrainLaneY(this.targetX, true) - 2;
+      enemyBullets.push(new EnemyBullet(this.targetX, groundY, -285 - this.tier * 35, 0, (12 + this.tier * 2) * difficulty, 12, this.color));
+      enemyBullets.push(new EnemyBullet(this.targetX, groundY, 285 + this.tier * 35, 0, (12 + this.tier * 2) * difficulty, 12, this.color));
+      audio.crash(1.15 + this.tier * 0.12);
+    }
+
+    draw() {
+      const pulse = 0.7 + Math.sin(time * 16 + this.targetX) * 0.22;
+      ctx.save();
+      ctx.globalAlpha = 0.55 + pulse * 0.25;
+      ctx.strokeStyle = this.color;
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.ellipse(this.targetX, this.targetY + 4, this.radius * (0.48 + pulse * 0.08), 12, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(this.targetX - 15, this.targetY - 11);
+      ctx.lineTo(this.targetX + 15, this.targetY + 19);
+      ctx.moveTo(this.targetX + 15, this.targetY - 11);
+      ctx.lineTo(this.targetX - 15, this.targetY + 19);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+
+      if (this.delay <= 0) {
+        ctx.translate(this.cx, this.cy);
+        ctx.rotate(this.flight * 13);
+        ctx.fillStyle = "#202933";
+        ctx.strokeStyle = this.color;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(-13, -7);
+        ctx.lineTo(8, -11);
+        ctx.lineTo(15, 0);
+        ctx.lineTo(8, 11);
+        ctx.lineTo(-13, 7);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = "#fff2a2";
+        ctx.fillRect(-18, -4, 8, 8);
+      }
+      ctx.restore();
+    }
+  }
+
+
+  class ArenaEruption extends Entity {
+    constructor(x, kind, color, delay = 0.55, activeTime = 0.44, width = 72, height = 160, damage = 20) {
+      const ground = terrainSurfaceY(x);
+      super(x - width / 2, ground - 10, width, 10);
+      this.kind = kind;
+      this.color = color;
+      this.delay = delay;
+      this.activeTime = activeTime;
+      this.maxActive = activeTime;
+      this.fullHeight = height;
+      this.damage = damage;
+      this.baseY = ground;
+      this.active = false;
+      this.hitPlayers = new Set();
+      this.phase = rand(0, Math.PI * 2);
+    }
+
+    update(dt) {
+      this.baseY = terrainSurfaceY(this.cx);
+      if (this.delay > 0) {
+        this.delay -= dt;
+        this.y = this.baseY - 10;
+        this.h = 10;
+        return;
+      }
+      this.active = true;
+      this.activeTime -= dt;
+      const progress = clamp(1 - this.activeTime / Math.max(0.001, this.maxActive), 0, 1);
+      const rise = Math.sin(Math.PI * progress);
+      this.h = Math.max(18, this.fullHeight * rise);
+      this.y = this.baseY - this.h;
+      if (this.activeTime <= 0) this.dead = true;
+    }
+
+    isDangerous() { return this.active && !this.dead; }
+
+    damagePlayer(player) {
+      if (this.hitPlayers.has(player.index)) return;
+      this.hitPlayers.add(player.index);
+      player.hit(this.damage * difficulty, player.cx < this.cx ? -1 : 1);
+      player.knockbackX = (player.cx < this.cx ? -1 : 1) * 190;
+      audio.impact(1.15, this.kind === "root" ? "wood" : "metal");
+    }
+
+    draw() {
+      const pulse = 0.65 + Math.sin(time * 16 + this.phase) * 0.25;
+      if (!this.active) {
+        ctx.save();
+        ctx.globalAlpha = 0.45 + pulse * 0.30;
+        ctx.strokeStyle = this.color;
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.ellipse(this.cx, this.baseY - 3, this.w * 0.58, 12, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(this.cx - 16, this.baseY - 22);
+        ctx.lineTo(this.cx + 16, this.baseY - 2);
+        ctx.moveTo(this.cx + 16, this.baseY - 22);
+        ctx.lineTo(this.cx - 16, this.baseY - 2);
+        ctx.stroke();
+        ctx.restore();
+        return;
+      }
+
+      ctx.save();
+      if (this.kind === "root") {
+        ctx.fillStyle = "#24462f";
+        ctx.strokeStyle = this.color;
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.moveTo(this.cx - this.w * 0.42, this.baseY);
+        ctx.quadraticCurveTo(this.cx - 10, this.y + this.h * 0.52, this.cx - 6, this.y);
+        ctx.lineTo(this.cx + 12, this.y + 18);
+        ctx.quadraticCurveTo(this.cx + 22, this.y + this.h * 0.55, this.cx + this.w * 0.42, this.baseY);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = "#dfff9b";
+        ctx.fillRect(this.cx - 8, this.y + 24, 16, 11);
+      } else if (this.kind === "ice") {
+        ctx.fillStyle = "#8fd7eb";
+        ctx.strokeStyle = this.color;
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.moveTo(this.cx, this.y);
+        ctx.lineTo(this.x + this.w, this.baseY);
+        ctx.lineTo(this.x, this.baseY);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = "#ffffff";
+        ctx.beginPath();
+        ctx.moveTo(this.cx, this.y + 14);
+        ctx.lineTo(this.cx + 10, this.baseY - 18);
+        ctx.lineTo(this.cx - 5, this.baseY - 18);
+        ctx.closePath();
+        ctx.fill();
+      } else {
+        ctx.fillStyle = "#6d2fd1";
+        ctx.strokeStyle = this.color;
+        ctx.lineWidth = 5;
+        ctx.fillRect(this.x + 8, this.y + 18, this.w - 16, this.h - 18);
+        ctx.strokeRect(this.x + 8, this.y + 18, this.w - 16, this.h - 18);
+        ctx.fillStyle = "#f0c8ff";
+        ctx.fillRect(this.cx - 7, this.y, 14, this.h - 8);
+      }
+      ctx.restore();
+    }
+  }
+
+  class GravityWell extends Entity {
+    constructor(x, y, color, duration = 2.7, tier = 0) {
+      super(x - 62, y - 62, 124, 124);
+      this.color = color;
+      this.duration = duration;
+      this.maxDuration = duration;
+      this.tier = tier;
+      this.damage = 18 + tier * 2;
+      this.hitCooldown = new Map();
+    }
+
+    update(dt) {
+      this.duration -= dt;
+      if (this.duration <= 0) { this.dead = true; return; }
+      for (const player of players) {
+        if (player.dead) continue;
+        const dx = this.cx - player.cx;
+        const dy = this.cy - player.cy;
+        const distance = Math.max(55, Math.hypot(dx, dy));
+        if (distance < 520) {
+          const force = (1 - distance / 520) * (360 + this.tier * 80);
+          player.x += dx / distance * force * dt;
+          if (!player.onGround) player.vy += dy / distance * force * 0.55 * dt;
+        }
+        const remaining = (this.hitCooldown.get(player.index) || 0) - dt;
+        this.hitCooldown.set(player.index, remaining);
+        if (distance < 74 && remaining <= 0) {
+          player.hit(this.damage * difficulty, dx < 0 ? -1 : 1);
+          this.hitCooldown.set(player.index, 0.55);
+        }
+      }
+    }
+
+    isDangerous() { return false; }
+    damagePlayer() {}
+
+    draw() {
+      const life = clamp(this.duration / this.maxDuration, 0, 1);
+      ctx.save();
+      ctx.translate(this.cx, this.cy);
+      for (let i = 0; i < 4; i++) {
+        ctx.strokeStyle = i % 2 ? this.color : "#fff36d";
+        ctx.globalAlpha = 0.24 + life * 0.14;
+        ctx.lineWidth = 5 - i * 0.6;
+        ctx.beginPath();
+        ctx.arc(0, 0, 72 + i * 42 + Math.sin(time * 4 + i) * 10, time * (i % 2 ? -1.2 : 1.0), time * (i % 2 ? -1.2 : 1.0) + Math.PI * 1.45);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = "#080713";
+      ctx.beginPath(); ctx.arc(0, 0, 44, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = this.color;
+      ctx.lineWidth = 8;
+      ctx.stroke();
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath(); ctx.arc(-10, -12, 8, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
+  }
+
+
+  class RailSweeper extends Entity {
+    constructor(startX, endX, baseY, direction, color, delay, damage) {
+      super(startX, baseY - 66, 285, 66);
+      this.endX = endX;
+      this.direction = direction;
+      this.color = color;
+      this.delay = delay;
+      this.damage = damage;
+      this.speed = 760;
+      this.baseY = baseY;
+      this.active = false;
+      this.hitPlayers = new Set();
+    }
+
+    update(dt) {
+      this.baseY = terrainSurfaceY(this.cx);
+      this.y = this.baseY - this.h;
+      if (this.delay > 0) { this.delay -= dt; return; }
+      this.active = true;
+      this.x += this.direction * this.speed * dt;
+      if ((this.direction > 0 && this.x > this.endX) || (this.direction < 0 && this.x + this.w < this.endX)) this.dead = true;
+    }
+
+    isDangerous() { return this.active && !this.dead; }
+
+    damagePlayer(player) {
+      if (this.hitPlayers.has(player.index)) return;
+      this.hitPlayers.add(player.index);
+      player.hit(this.damage * difficulty, this.direction);
+      player.knockbackX = this.direction * 360;
+      audio.crash(1.15);
+    }
+
+    draw() {
+      if (!this.active) {
+        ctx.save();
+        ctx.globalAlpha = 0.45 + Math.sin(time * 18) * 0.22;
+        ctx.strokeStyle = this.color;
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.moveTo(this.direction > 0 ? this.x + this.w : this.x, this.baseY - 8);
+        ctx.lineTo(this.direction > 0 ? this.endX : this.endX + this.w, this.baseY - 8);
+        ctx.stroke();
+        ctx.restore();
+        return;
+      }
+      ctx.save();
+      ctx.translate(this.cx, this.cy);
+      if (this.direction < 0) ctx.scale(-1, 1);
+      ctx.fillStyle = "#20243d";
+      ctx.strokeStyle = this.color;
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.moveTo(-142, 28);
+      ctx.lineTo(-112, -30);
+      ctx.lineTo(105, -30);
+      ctx.lineTo(142, 6);
+      ctx.lineTo(124, 33);
+      ctx.lineTo(-126, 33);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = "#0c1422";
+      for (let i = 0; i < 5; i++) ctx.fillRect(-88 + i * 43, -16, 28, 20);
+      ctx.fillStyle = "#fff36d";
+      ctx.fillRect(112, -8, 18, 11);
+      ctx.fillStyle = this.color;
+      ctx.fillRect(-120, 18, 230, 7);
+      ctx.restore();
+    }
+  }
+
+  class ClockworkSweeper extends Entity {
+    constructor(startX, endX, baseY, direction, lane, color, delay, damage) {
+      const high = lane === "high";
+      const y = high ? baseY - 105 : baseY - 58;
+      const h = high ? 28 : 58;
+      super(startX - 22, y, 44, h);
+      this.startX = startX;
+      this.endX = endX;
+      this.direction = direction;
+      this.lane = lane;
+      this.color = color;
+      this.delay = delay;
+      this.damage = damage;
+      this.speed = 620;
+      this.baseY = baseY;
+      this.active = false;
+      this.hitPlayers = new Set();
+    }
+
+    update(dt) {
+      this.baseY = terrainSurfaceY(this.cx);
+      if (this.delay > 0) { this.delay -= dt; return; }
+      this.active = true;
+      this.x += this.direction * this.speed * dt;
+      this.y = this.lane === "high" ? this.baseY - 105 : this.baseY - 58;
+      if ((this.direction > 0 && this.x > this.endX) || (this.direction < 0 && this.x + this.w < this.endX)) this.dead = true;
+    }
+
+    isDangerous() { return this.active && !this.dead; }
+
+    damagePlayer(player) {
+      if (this.hitPlayers.has(player.index)) return;
+      this.hitPlayers.add(player.index);
+      player.hit(this.damage * difficulty, this.direction);
+      player.knockbackX = this.direction * 260;
+      audio.impact(1.2, "metal");
+    }
+
+    draw() {
+      if (!this.active) {
+        ctx.save();
+        ctx.strokeStyle = this.color;
+        ctx.lineWidth = 4;
+        ctx.globalAlpha = 0.55 + Math.sin(time * 18) * 0.25;
+        ctx.beginPath();
+        ctx.moveTo(this.startX, this.lane === "high" ? this.baseY - 105 : this.baseY - 58);
+        ctx.lineTo(this.endX, this.lane === "high" ? this.baseY - 105 : this.baseY - 58);
+        ctx.stroke();
+        ctx.restore();
+        return;
+      }
+      ctx.save();
+      ctx.translate(this.cx, this.cy);
+      ctx.rotate(time * 7 * this.direction);
+      ctx.fillStyle = "#2a1b35";
+      ctx.strokeStyle = this.color;
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      for (let i = 0; i < 16; i++) {
+        const angle = i * Math.PI / 8;
+        const radius = i % 2 ? 24 : 39;
+        const x = Math.cos(angle) * radius;
+        const y = Math.sin(angle) * radius;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = "#fff36d";
+      ctx.fillRect(-7, -7, 14, 14);
+      ctx.restore();
+    }
+  }
+
+  class TimeEcho extends Entity {
+    constructor(x, y, profile, delay, damage) {
+      super(x - profile.w * 0.28, y, profile.w * 0.56, profile.h * 0.56);
+      this.profile = profile;
+      this.delay = delay;
+      this.life = 1.12 + delay;
+      this.damage = damage;
+      this.fired = false;
+      this.phase = rand(0, Math.PI * 2);
+    }
+
+    update(dt) {
+      this.delay -= dt;
+      this.life -= dt;
+      if (!this.fired && this.delay <= 0) {
+        this.fired = true;
+        const target = players.find(player => !player.dead);
+        const base = target ? Math.atan2(target.cy - this.cy, target.cx - this.cx) : Math.PI;
+        for (let i = -2; i <= 2; i++) {
+          const angle = base + i * 0.16;
+          enemyBullets.push(new EnemyBullet(this.cx, this.cy, Math.cos(angle) * 330, Math.sin(angle) * 330, this.damage * difficulty, 11, this.profile.accent));
+        }
+        blastEffects.push(new BlastEffect(this.cx, this.cy, this.profile.accent, 1));
+        audio.tone(390, 0.12, "square", 0.07, -130);
+      }
+      if (this.life <= 0) this.dead = true;
+    }
+
+    draw() {
+      ctx.save();
+      ctx.globalAlpha = this.fired ? clamp(this.life / 0.6, 0, 0.45) : 0.30 + Math.sin(time * 14 + this.phase) * 0.15;
+      ctx.translate(this.cx, this.cy);
+      ctx.scale(0.56, 0.56);
+      drawBossForm(this.profile, time * 1.6 + this.phase, !this.fired);
+      ctx.restore();
+    }
+  }
+
+  class BossFlyby extends Entity {
+    constructor(profileKey, direction = -1, bombs = 4) {
+      const profile = BOSS_PROFILES[profileKey];
+      const startX = direction < 0 ? cameraX + visibleWorldW + 280 : cameraX - profile.w - 280;
+      const y = cameraY + 155;
+      super(startX, y, profile.w, profile.h);
+      this.profile = profile;
+      this.direction = direction;
+      this.speed = 560;
+      this.bombs = bombs;
+      this.dropTimer = 0.22;
+      this.life = 3.4;
+      this.phase = rand(0, Math.PI * 2);
+    }
+
+    update(dt) {
+      this.life -= dt;
+      this.phase += dt;
+      this.x += this.direction * this.speed * dt;
+      this.y += Math.sin(this.phase * 3) * 28 * dt;
+      this.dropTimer -= dt;
+      if (this.bombs > 0 && this.dropTimer <= 0) {
+        this.dropTimer = 0.42;
+        this.bombs--;
+        const target = players.find(player => !player.dead);
+        const targetX = clamp((target ? target.cx + target.vx * 0.35 : this.cx) + rand(-120, 120), cameraX + 100, cameraX + visibleWorldW - 100);
+        debris.push(new SiegeMortar(this.cx, this.cy, targetX, this.profile.accent, 0.05, 1));
+      }
+      if (this.life <= 0 || this.x + this.w < cameraX - 500 || this.x > cameraX + visibleWorldW + 500) this.dead = true;
+    }
+
+    draw() {
+      ctx.save();
+      ctx.translate(this.cx, this.cy);
+      ctx.scale(0.72, 0.72);
+      if (this.direction > 0) ctx.scale(-1, 1);
+      drawBossForm(this.profile, this.phase, false);
+      ctx.restore();
+    }
+  }
+
   class Hazard extends Entity {
     constructor(type, x, width = 55) {
       super(x, terrainSurfaceY(x + width / 2) - 24, width, 24);
@@ -4888,6 +6333,7 @@
 
     [10900, () => showBanner("NEON ASCENT")],
     [12100, () => { checkpointX = 12100; showBanner("SKYBRIDGE CHECKPOINT"); }],
+    [12620, () => startBossFlyby("neonGunship", -1, 4)],
     [13350, () => startBoss("neonGunship", 13820)],
     [14500, () => startRival(1, 14920)],
     [15700, () => {
@@ -4908,12 +6354,14 @@
     [29400, () => { checkpointX = 29400; showBanner("CANOPY ASCENT"); }],
     [30900, () => startBoss("bioHydra", 31480)],
     [32100, () => showBanner("LEVIATHAN NEST")],
+    [32620, () => startLeviathanStalk()],
     [33450, () => startRival(3, 33820)],
     [34450, () => { checkpointX = 34450; showBanner("FORGE HEART"); }],
     [35150, () => startBoss("bioLeviathan", 35720)],
 
     [37100, () => showBanner("MAGLEV RIDGE")],
     [38400, () => { checkpointX = 38400; showBanner("WHITEOUT RAVINE"); }],
+    [38920, () => startBossFlyby("frostCarrier", 1, 5)],
     [39600, () => startBoss("frostCarrier", 40180)],
     [40950, () => showBanner("ABSOLUTE ZERO LINE")],
     [42100, () => startRival(4, 42520)],
@@ -4927,6 +6375,7 @@
     [51400, () => {
       for (let i = 0; i < 8; i++) debris.push(new FallingDebris(51700 + i * 120, cameraY - 125, 42, true));
     }],
+    [52080, () => startEmperorEchoAmbush()],
     [52700, () => { checkpointX = 52700; showBanner("EMPEROR'S GATE"); }],
     [53600, () => startBoss("reignEmperor", 54120)]
   ];
@@ -5096,6 +6545,7 @@
     floatingTexts = [];
     blastEffects = [];
     bossDeaths = [];
+    setPieces = [];
     victoryScene = null;
     launchPads = [];
     portals = [];
@@ -5195,6 +6645,7 @@
     floatingTexts = [];
     blastEffects = [];
     bossDeaths = [];
+    setPieces = [];
     victoryScene = null;
     specialAttack = null;
     debris = [];
@@ -5250,7 +6701,42 @@
     if (activeBoss || defeatedBosses.has(key)) return false;
     const profile = BOSS_PROFILES[key];
     showBanner(`WARNING • ${profile.name}`);
-    activeBoss = new StageBoss(key, x);
+    const bossFactories = {
+      cityOmega: () => new OmegaTank(key, x),
+      neonGunship: () => new AegisGunshipBoss(key, x),
+      bioLeviathan: () => new BioLeviathanBoss(key, x),
+      frostCarrier: () => new AegisGunshipBoss(key, x),
+      frostTitan: () => new FrostTitanBoss(key, x),
+      reignEmperor: () => new ReignEmperorBoss(key, x)
+    };
+    activeBoss = bossFactories[key] ? bossFactories[key]() : new StageBoss(key, x);
+    return true;
+  }
+
+  function startBossFlyby(profileKey, direction = -1, bombs = 4) {
+    setPieces.push(new BossFlyby(profileKey, direction, bombs));
+    showBanner("INCOMING");
+    audio.tone(126, 0.25, "sawtooth", 0.11, 190);
+    return true;
+  }
+
+  function startLeviathanStalk() {
+    const lead = leadingPlayerX(true);
+    for (let i = 0; i < 5; i++) {
+      hazards.push(new ArenaEruption(lead + 260 + i * 155, "root", BOSS_PROFILES.bioLeviathan.accent, 0.35 + i * 0.16, 0.42, 66, 140, 17));
+    }
+    showBanner("SOMETHING BELOW");
+    audio.tone(66, 0.40, "sawtooth", 0.13, -20);
+    return true;
+  }
+
+  function startEmperorEchoAmbush() {
+    const lead = leadingPlayerX(true);
+    for (let i = 0; i < 3; i++) {
+      const x = lead + 260 + i * 220;
+      debris.push(new TimeEcho(x, terrainSurfaceY(x) - BOSS_PROFILES.reignEmperor.h * 0.56 - 40, BOSS_PROFILES.reignEmperor, i * 0.32, 13));
+    }
+    showBanner("TIME ECHO");
     return true;
   }
 
@@ -5487,6 +6973,7 @@
     if (!cinematic) {
       for (const bullet of bullets) bullet.update(dt);
       for (const pickup of pickups) pickup.update(dt);
+      for (const setPiece of setPieces) setPiece.update(dt);
 
       if (portalArrivalGrace <= 0) {
         for (const enemy of enemies) enemy.update(dt);
@@ -5515,6 +7002,7 @@
     pruneDead(particles);
     pruneDead(blastEffects);
     pruneDead(bossDeaths);
+    pruneDead(setPieces);
     pruneDead(floatingTexts);
     pruneDead(debris);
     pruneDead(hazards);
@@ -6613,7 +8101,7 @@
     ctx.fillStyle = "#405767";
     ctx.font = `700 7px ${UI_FONT}`;
     ctx.textAlign = "right";
-    ctx.fillText("v5.1", x + panelW - 8, y + panelH - 7);
+    ctx.fillText("v5.4", x + panelW - 8, y + panelH - 7);
   }
 
   function drawHealthCard(player, x, y, right = false) {
@@ -6772,49 +8260,57 @@
 
     let defs;
     if (portrait) {
-      const layoutR = clamp(screenW * 0.086, 32, 42);
-      const fireX = screenW - safeRight - layoutR - 14;
-      const fireY = screenH - safeBottom - layoutR - 22;
+      const layoutR = clamp(screenW * 0.106, 42, 58);
+      const edgeInset = Math.max(18, layoutR * 0.34);
+      const fireX = screenW - safeRight - layoutR - edgeInset;
+      const fireY = screenH - safeBottom - layoutR - Math.max(24, layoutR * 0.42);
       defs = [
-        ["KeyG", "A", "strike", fireX - layoutR * 3.65, fireY + layoutR * 0.12, layoutR * 0.72, layoutR * 0.88, "#d39a28"],
-        ["KeyF", "B", "fire", fireX - layoutR * 1.80, fireY, layoutR * 0.82, layoutR, "#b92f35"],
-        ["KeyW", "C", "jump", fireX, fireY - layoutR * 0.30, layoutR * 0.82, layoutR, "#285b91"]
+        ["KeyG", "A", fireX - layoutR * 4.15, fireY + layoutR * 0.22, layoutR * 0.86, layoutR * 1.08],
+        ["KeyF", "B", fireX - layoutR * 2.05, fireY, layoutR, layoutR * 1.12],
+        ["KeyW", "C", fireX, fireY - layoutR * 0.55, layoutR, layoutR * 1.12]
       ];
     } else {
-      const layoutR = clamp(screenH * 0.073, 26, 31);
-      const edgeX = screenW - safeRight - layoutR - 13;
-      const edgeY = screenH - safeBottom - layoutR - 13;
+      const layoutR = clamp(Math.min(screenW, screenH) * 0.102, 38, 52);
+      const edgeInset = Math.max(16, layoutR * 0.34);
+      const edgeX = screenW - safeRight - layoutR - edgeInset;
+      const edgeY = screenH - safeBottom - layoutR - edgeInset;
       defs = [
-        ["KeyG", "A", "strike", edgeX - layoutR * 4.35, edgeY + layoutR * 0.06, layoutR * 0.69, layoutR * 0.82, "#d39a28"],
-        ["KeyF", "B", "fire", edgeX - layoutR * 2.18, edgeY, layoutR * 0.82, layoutR, "#b92f35"],
-        ["KeyW", "C", "jump", edgeX, edgeY - layoutR * 1.05, layoutR * 0.79, layoutR * 0.96, "#285b91"]
+        ["KeyG", "A", edgeX - layoutR * 4.65, edgeY + layoutR * 0.10, layoutR * 0.88, layoutR * 1.10],
+        ["KeyF", "B", edgeX - layoutR * 2.30, edgeY, layoutR, layoutR * 1.14],
+        ["KeyW", "C", edgeX, edgeY - layoutR * 1.10, layoutR * 0.98, layoutR * 1.14]
       ];
     }
 
-    for (const [code, letter, icon, x, y, r, hitR, color] of defs) {
+    const genesisBlue = "#2f6dff";
+    const genesisBlueBright = "#6fa4ff";
+    for (const [code, letter, x, y, r, hitR] of defs) {
       uiRects.buttons[code] = { x, y, r: hitR };
       const held = Boolean(touchKeys[code]);
-      ctx.globalAlpha = held ? 0.96 : (portrait ? 0.70 : 0.62);
-      ctx.fillStyle = "rgba(0,0,0,.36)";
-      ctx.beginPath(); ctx.arc(x + 2, y + 3, r, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = held ? "#eef3f5" : color;
-      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = held ? "#fff36d" : "rgba(255,255,255,.72)";
-      ctx.lineWidth = 1.9; ctx.stroke();
-      drawUiIcon(icon, x, y, r * 0.80, held ? color : "#ffffff", 2.2);
+      ctx.globalAlpha = held ? 0.98 : (portrait ? 0.84 : 0.78);
 
-      const badgeR = Math.max(7, r * 0.23);
-      const badgeX = x + r * 0.68;
-      const badgeY = y - r * 0.68;
-      ctx.fillStyle = "rgba(4,10,18,.94)";
-      ctx.beginPath(); ctx.arc(badgeX, badgeY, badgeR, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = held ? "#fff36d" : "rgba(255,255,255,.58)";
-      ctx.lineWidth = 1.2; ctx.stroke();
-      ctx.fillStyle = held ? "#fff36d" : "#dce8ee";
+      ctx.fillStyle = "rgba(0,0,0,.38)";
+      ctx.beginPath(); ctx.arc(x + r * 0.06, y + r * 0.10, r * 1.02, 0, Math.PI * 2); ctx.fill();
+
+      const rim = ctx.createRadialGradient(x - r * 0.25, y - r * 0.35, r * 0.12, x, y, r * 1.05);
+      rim.addColorStop(0, held ? "#4a4a4a" : "#3a3a3a");
+      rim.addColorStop(0.54, held ? "#1a1a1a" : "#141414");
+      rim.addColorStop(1, "#020202");
+      ctx.fillStyle = rim;
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+
+      ctx.strokeStyle = held ? genesisBlueBright : "rgba(255,255,255,.42)";
+      ctx.lineWidth = Math.max(2.1, r * 0.068);
+      ctx.stroke();
+
+      ctx.strokeStyle = held ? "rgba(255,255,255,.18)" : "rgba(255,255,255,.10)";
+      ctx.lineWidth = Math.max(1.1, r * 0.028);
+      ctx.beginPath(); ctx.arc(x, y, r * 0.80, Math.PI * 0.95, Math.PI * 1.80); ctx.stroke();
+
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.font = `900 ${Math.max(7, badgeR * 1.05)}px ${UI_FONT}`;
-      ctx.fillText(letter, badgeX, badgeY + 0.4);
+      ctx.fillStyle = held ? genesisBlueBright : genesisBlue;
+      ctx.font = `900 ${Math.max(20, r * 0.98)}px ${UI_FONT}`;
+      ctx.fillText(letter, x, y + r * 0.02);
     }
     ctx.restore();
   }
@@ -6944,6 +8440,7 @@
     drawPortalTravelWorld();
     for (const hazard of hazards) if (inView(hazard, 160)) hazard.draw();
     for (const pickup of pickups) if (inView(pickup)) pickup.draw();
+    for (const setPiece of setPieces) if (inView(setPiece, 360)) setPiece.draw();
     for (const enemy of enemies) if (inView(enemy, 220)) enemy.draw();
     if (activeBoss && !activeBoss.dead) activeBoss.draw();
     for (const death of bossDeaths) if (inView(death, 260)) death.draw();
