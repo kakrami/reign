@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>Iron Reign: Stage Assault v4.9</title>
+<title>Iron Reign: Stage Assault v5.1</title>
 <style>
   :root {
     --safe-top: env(safe-area-inset-top, 0px);
@@ -142,65 +142,80 @@
     },
     neonGunship: {
       name: "AEGIS GUNSHIP", form: "gunship", w: 300, h: 145,
-      health: 1180, score: 6500, left: 720, right: 430,
+      health: 1320, score: 6500, left: 720, right: 430, cadence: 2.65,
       color: "#31345f", accent: "#59ecff", attacks: ["missiles", "rain", "fan", "cross"],
       reward: [3, "health"], checkpoint: 14300, floating: true
     },
     neonRail: {
       name: "TITAN RAIL CANNON", form: "rail", w: 285, h: 255,
-      health: 1950, score: 11000, left: 760, right: 120,
+      health: 2180, score: 11000, left: 760, right: 120, cadence: 2.55,
       color: "#472d59", accent: "#ff5ed7", attacks: ["laser", "cross", "summon", "debris"],
       reward: ["health", "special"], checkpoint: 18500, levelEnd: 1
     },
     orbitMantis: {
       name: "VOID MANTIS", form: "mantis", w: 260, h: 245,
-      health: 1680, score: 9500, left: 760, right: 260,
+      health: 1940, score: 9500, left: 760, right: 260, cadence: 2.45,
       color: "#253f4c", accent: "#69ffb0", attacks: ["fan", "summon", "wave", "missiles"],
       reward: [2, "health"], checkpoint: 23000, floating: true
     },
     orbitCore: {
       name: "IRON REIGN CORE", form: "core", w: 290, h: 290,
-      health: 2800, score: 18000, left: 820, right: 120,
+      health: 3150, score: 18000, left: 820, right: 120, cadence: 2.40,
       color: "#37284f", accent: "#ffdf59", attacks: ["nova", "spiral", "laser", "rain"],
       reward: ["health", "special"], checkpoint: 27340, levelEnd: 2
     },
     bioHydra: {
       name: "TRI-HEAD HYDRA", form: "hydra", w: 285, h: 245,
-      health: 2250, score: 13500, left: 780, right: 250,
+      health: 2580, score: 13500, left: 780, right: 250, cadence: 2.35,
       color: "#24462f", accent: "#7dff63", attacks: ["summon", "fan", "rain", "wave"],
       reward: [1, "health"], checkpoint: 31900
     },
     bioLeviathan: {
       name: "BIOFORGE LEVIATHAN", form: "beast", w: 330, h: 275,
-      health: 3300, score: 20500, left: 840, right: 120,
+      health: 3720, score: 20500, left: 840, right: 120, cadence: 2.30,
       color: "#3f2f35", accent: "#b9ff4d", attacks: ["wave", "summon", "debris", "nova", "laser"],
       reward: ["health", "special"], checkpoint: 36140, levelEnd: 3
     },
     frostCarrier: {
       name: "POLAR DREAD CARRIER", form: "carrier", w: 330, h: 170,
-      health: 2550, score: 16000, left: 820, right: 360,
+      health: 2940, score: 16000, left: 820, right: 360, cadence: 2.25,
       color: "#29445d", accent: "#8ff7ff", attacks: ["missiles", "rain", "cross", "fan"],
       reward: [3, "health"], checkpoint: 40600, floating: true
     },
     frostTitan: {
       name: "ABSOLUTE ZERO TITAN", form: "titan", w: 305, h: 290,
-      health: 3700, score: 24000, left: 850, right: 120,
+      health: 4180, score: 24000, left: 850, right: 120, cadence: 2.20,
       color: "#344657", accent: "#d6fbff", attacks: ["wave", "laser", "summon", "nova", "debris"],
       reward: ["health", "special"], checkpoint: 44940, levelEnd: 4
     },
     chronoSerpent: {
       name: "CHRONO SERPENT", form: "serpent", w: 330, h: 245,
-      health: 3200, score: 20000, left: 840, right: 280,
+      health: 3600, score: 20000, left: 840, right: 280, cadence: 2.15,
       color: "#3b2857", accent: "#ff8df4", attacks: ["spiral", "fan", "nova", "missiles", "wave"],
       reward: [2, "health"], checkpoint: 49900, floating: true
     },
     reignEmperor: {
       name: "IRON REIGN EMPEROR", form: "emperor", w: 340, h: 325,
-      health: 4900, score: 36000, left: 920, right: 100,
+      health: 5350, score: 36000, left: 920, right: 100, cadence: 2.35,
       color: "#3b2633", accent: "#ffd75e", attacks: ["summon", "missiles", "nova", "laser", "wave", "spiral", "fan"],
       campaignFinal: true
+    },
+    reignHunter: {
+      name: "REIGN HUNTER", form: "hunter", w: 242, h: 176,
+      health: 800, score: 1800, left: 760, right: 260, cadence: 2.25,
+      color: "#27313d", accent: "#ff6a42", attacks: ["debris", "horizontal"],
+      floating: true
     }
   };
+
+  const RIVAL_GADGETS = [
+    { id: "magnet", label: "MAGNET CLAW", accent: "#ff6a42", attacks: ["debris", "horizontal", "missiles"] },
+    { id: "railwing", label: "RAIL WINGS", accent: "#59ecff", attacks: ["laser", "cross", "fan"] },
+    { id: "gravity", label: "GRAVITY HALO", accent: "#69ffb0", attacks: ["spiral", "wave", "nova"] },
+    { id: "spore", label: "SPORE POD", accent: "#9cff58", attacks: ["summon", "rain", "fan"] },
+    { id: "cryo", label: "CRYO DRILL", accent: "#a8f7ff", attacks: ["wave", "debris", "missiles"] },
+    { id: "echo", label: "TIME ECHO RIG", accent: "#ff8df4", attacks: ["spiral", "laser", "missiles", "nova", "cross", "summon"] }
+  ];
 
   const keys = Object.create(null);
   const touchKeys = Object.create(null);
@@ -521,7 +536,7 @@
 
     const aspect = vw / vh;
     baseVisibleWorldW = portrait ? 820 : (aspect > 2.4 ? 1620 : 1500);
-    const bossScale = activeBoss && !activeBoss.dead ? (portrait ? 1.14 : 1.18) : 1;
+    const bossScale = activeBoss && !activeBoss.dead && activeBoss.arenaLock !== false ? (portrait ? 1.14 : 1.18) : 1;
     visibleWorldW = baseVisibleWorldW * bossScale;
     viewScale = canvas.width / visibleWorldW;
     visibleWorldH = canvas.height / viewScale;
@@ -548,7 +563,7 @@
   }
 
   function updateWorldView(dt) {
-    const targetScale = activeBoss && !activeBoss.dead
+    const targetScale = activeBoss && !activeBoss.dead && activeBoss.arenaLock !== false
       ? (portrait ? 1.14 : 1.18)
       : victoryScene
         ? 1.08
@@ -1225,7 +1240,7 @@
 
       const leftBound = cameraX + 24;
       let rightBound = LEVEL_W - 40;
-      if (activeBoss && !activeBoss.dead) {
+      if (activeBoss && !activeBoss.dead && activeBoss.arenaLock !== false) {
         rightBound = Math.min(rightBound, activeBoss.x - 28);
       }
       this.x = clamp(this.x, leftBound, Math.max(leftBound, rightBound - this.w));
@@ -1523,10 +1538,10 @@
       this.setCrouching(false);
       this.health = this.maxHealth;
 
-      const safeBase = activeBoss && !activeBoss.dead
+      const safeBase = activeBoss && !activeBoss.dead && activeBoss.arenaLock !== false
         ? Math.max(checkpointX, activeBoss.arenaLeft + 90)
         : checkpointX;
-      const bossLimit = activeBoss && !activeBoss.dead
+      const bossLimit = activeBoss && !activeBoss.dead && activeBoss.arenaLock !== false
         ? activeBoss.x - this.w - 72
         : LEVEL_W - this.w - 40;
 
@@ -2107,10 +2122,7 @@
         ctx.arc(this.target.cx, this.target.cy, pulse, 0, Math.PI * 2);
         ctx.stroke();
         ctx.setLineDash([]);
-        ctx.fillStyle = this.lockTimer > 0 ? "#fff36d" : "#ff6b5c";
-        ctx.font = `900 12px ${UI_FONT}`;
-        ctx.textAlign = "center";
-        ctx.fillText(this.lockTimer > 0 ? "LOCKING" : "EVADE", this.target.cx, this.target.y - 18);
+        drawUiIcon(this.lockTimer > 0 ? "lock" : "warning", this.target.cx, this.target.y - 20, 18, this.lockTimer > 0 ? "#fff36d" : "#ff6b5c", 2.4);
         ctx.restore();
       }
     }
@@ -2948,6 +2960,96 @@
       bossPolygon([[hx-8,hy-42],[hx+55,hy-30],[hx+82,hy],[hx+46,hy+34],[hx-12,hy+31]], body, accent, 7);
       bossEye(hx + 48, hy - 9, accent);
       ctx.fillStyle = "#fff3b0"; ctx.fillRect(hx + 56, hy + 21, 9, 20); ctx.fillRect(hx + 31, hy + 23, 9, 17);
+    } else if (p.form === "hunter") {
+      const gadget = p.gadget || "magnet";
+      const hover = Math.sin(phase * 3.1) * 6;
+      const wing = 12 + Math.sin(phase * 2.4) * 8;
+
+      if (gadget === "echo") {
+        ctx.save();
+        ctx.globalAlpha = 0.18;
+        for (const offset of [-64, 64]) {
+          ctx.translate(offset, 0);
+          bossPolygon([[-82,14],[-52,-42],[8,-58],[82,-12],[55,42],[-48,50]], body, accent, 4);
+          ctx.translate(-offset, 0);
+        }
+        ctx.restore();
+      }
+
+      bossPolygon([[-105,18],[-72,-48],[-5,-70],[78,-42],[118,7],[72,55],[-52,60]], body, accent, 7);
+      bossPolygon([[-74,-37],[-136,-70-wing],[-106,10]], "#1a2430", accent, 5);
+      bossPolygon([[62,-34],[134,-62+wing],[106,15]], "#1a2430", accent, 5);
+      ctx.fillStyle = "#0e1822";
+      ctx.fillRect(-34, -54, 72, 38);
+      ctx.fillStyle = "#9cecff";
+      ctx.fillRect(-24, -46, 52, 20);
+      ctx.fillStyle = accent;
+      ctx.fillRect(-84, 40 + hover, 32, 20);
+      ctx.fillRect(58, 37 - hover, 32, 20);
+      ctx.fillStyle = "#fff6c7";
+      ctx.fillRect(-77, 48 + hover, 18, 7);
+      ctx.fillRect(65, 45 - hover, 18, 7);
+      bossEye(8, -30, accent);
+
+      if (gadget === "magnet") {
+        ctx.save();
+        ctx.translate(-92, 13);
+        ctx.rotate(-0.35 + Math.sin(phase * 1.6) * 0.14);
+        ctx.strokeStyle = accent;
+        ctx.lineWidth = 9;
+        ctx.beginPath();
+        ctx.moveTo(0, 0); ctx.lineTo(-48, 28); ctx.lineTo(-64, 76);
+        ctx.stroke();
+        ctx.fillStyle = "#202a34";
+        ctx.fillRect(-79, 66, 31, 20);
+        ctx.fillStyle = accent;
+        ctx.fillRect(-84, 63, 8, 28);
+        ctx.fillRect(-51, 63, 8, 28);
+        ctx.restore();
+      } else if (gadget === "railwing") {
+        ctx.fillStyle = accent;
+        ctx.fillRect(-150, -22, 92, 12);
+        ctx.fillRect(62, -18, 96, 12);
+        ctx.fillStyle = "#151d28";
+        ctx.fillRect(-166, -28, 25, 24);
+        ctx.fillRect(149, -24, 25, 24);
+      } else if (gadget === "gravity") {
+        ctx.save();
+        ctx.rotate(phase * 1.7);
+        ctx.strokeStyle = accent;
+        ctx.lineWidth = 8;
+        ctx.beginPath(); ctx.arc(0, 2, 104, 0, Math.PI * 2); ctx.stroke();
+        for (let i = 0; i < 4; i++) {
+          ctx.rotate(Math.PI / 2);
+          ctx.fillStyle = "#16242a";
+          ctx.fillRect(93, -10, 34, 20);
+        }
+        ctx.restore();
+      } else if (gadget === "spore") {
+        for (const x of [-88, 87]) {
+          ctx.fillStyle = "#263b28";
+          ctx.beginPath(); ctx.ellipse(x, 8, 27, 39, 0, 0, Math.PI * 2); ctx.fill();
+          ctx.strokeStyle = accent; ctx.lineWidth = 5; ctx.stroke();
+          ctx.fillStyle = "#dfff9b";
+          ctx.beginPath(); ctx.arc(x, 2, 9 + Math.sin(phase * 4 + x) * 2, 0, Math.PI * 2); ctx.fill();
+        }
+      } else if (gadget === "cryo") {
+        ctx.save();
+        ctx.translate(112, 6);
+        ctx.rotate(phase * 2.4);
+        bossPolygon([[0,-34],[76,0],[0,34],[-18,0]], "#d6fbff", accent, 5);
+        ctx.restore();
+      } else if (gadget === "echo") {
+        ctx.save();
+        ctx.translate(112, 5);
+        ctx.rotate(-phase * 1.9);
+        ctx.strokeStyle = accent;
+        ctx.lineWidth = 7;
+        ctx.strokeRect(-30, -30, 60, 60);
+        ctx.rotate(Math.PI / 4);
+        ctx.strokeRect(-23, -23, 46, 46);
+        ctx.restore();
+      }
     } else if (p.form === "emperor") {
       const wing = 22 + Math.sin(phase * 1.8) * 12;
       bossPolygon([[-72,-74],[-176,-160-wing],[-132,-24],[-190,78],[-72,50]], "#2b183d", accent, 6);
@@ -2984,6 +3086,13 @@
       this.telegraphLabel = "";
       this.flashTimer = 0;
       this.attackMode = 0;
+      this.combatTier = 0;
+      this.phaseShield = 0;
+      this.comboTimer = 0;
+      this.comboAttackName = null;
+      this.arenaLock = true;
+      this.hudHidden = false;
+      this.baseX = x;
       const zoneIndex = WORLD_ZONES.findIndex(zone => x >= zone.start && x < zone.end);
       const zone = WORLD_ZONES[Math.max(0, zoneIndex)];
       const arenaTargetWidth = Math.min(
@@ -3020,14 +3129,20 @@
     update(dt) {
       this.phase += dt;
       this.flashTimer = Math.max(0, this.flashTimer - dt);
+      this.phaseShield = Math.max(0, this.phaseShield - dt);
       if (this.introTimer > 0) { this.introTimer -= dt; return; }
       const target = this.target();
       if (!target) return;
       if (specialAttack) { this.attackTimer = Math.max(this.attackTimer, 0.45); return; }
 
+      const healthRatio = clamp(this.health / Math.max(1, this.maxHealth), 0, 1);
+      const nextTier = healthRatio <= 0.34 ? 2 : healthRatio <= 0.68 ? 1 : 0;
+      if (nextTier > this.combatTier) this.enterCombatTier(nextTier);
+
       const formFloat = {
         gunship: [34, 1.85], carrier: [28, 1.5], mantis: [38, 1.8],
-        serpent: [45, 1.55], core: [24, 1.2], hydra: [7, 0.9], beast: [5, 1.15]
+        serpent: [45, 1.55], core: [24, 1.2], hydra: [7, 0.9], beast: [5, 1.15],
+        hunter: [30, 1.75]
       }[this.profile.form] || [this.profile.floating ? 24 : 8, this.profile.floating ? 1.55 : 0.9];
       this.y = this.baseY + Math.sin(this.phase * formFloat[1]) * formFloat[0];
 
@@ -3041,31 +3156,87 @@
         return;
       }
 
+      if (this.comboTimer > 0) {
+        this.comboTimer -= dt;
+        if (this.comboTimer <= 0 && this.comboAttackName) {
+          const comboName = this.comboAttackName;
+          this.comboAttackName = null;
+          this.beginBossAttack(comboName, true);
+          return;
+        }
+      }
+
       this.attackTimer -= dt;
       if (this.attackTimer <= 0) {
         const attackName = this.profile.attacks[this.attackMode % this.profile.attacks.length];
         this.attackMode++;
-        const attackMap = {
-          horizontal: ["HIGH / LOW BURST", () => this.horizontalBurst(), 0.62],
-          rain: ["VERTICAL STRIKE • MOVE", () => this.verticalRain(), 0.72],
-          debris: ["IMPACT ZONES • MOVE", () => this.overheadDrop(), 0.78],
-          cross: ["CROSS FIRE • FIND GAP", () => this.crossFire(), 0.74],
-          laser: ["RAIL SWEEP • JUMP", () => this.laserSweep(), 0.82],
-          wave: ["SHOCKWAVE • DOUBLE JUMP", () => this.shockwave(), 0.78],
-          spiral: ["ENERGY RING • FIND GAP", () => this.energyRing(), 0.82],
-          fan: ["HUNTER FAN • MOVE THROUGH GAP", () => this.fanBurst(), 0.70],
-          summon: ["REINFORCEMENTS INBOUND", () => this.summonMinions(), 0.82],
-          missiles: ["LOCK-ON MISSILES • KEEP MOVING", () => this.missileSalvo(), 0.82],
-          nova: ["CORE NOVA • FIND THE OPENING", () => this.novaPulse(), 0.88]
-        };
-        const entry = attackMap[attackName] || attackMap.horizontal;
-        this.telegraph(entry[0], entry[1], entry[2]);
-        this.attackTimer = (2.85 - Math.min(0.72, campaignLevel * 0.16)) / Math.sqrt(difficulty);
+        this.beginBossAttack(attackName, false);
+        const baseCadence = this.profile.cadence || (2.85 - Math.min(0.72, campaignLevel * 0.16));
+        const tierPressure = this.combatTier * 0.28;
+        const levelPressure = campaignLevel * 0.035;
+        this.attackTimer = Math.max(1.08, (baseCadence - tierPressure - levelPressure) / Math.sqrt(difficulty));
       }
 
       for (const player of players) {
-        if (!player.dead && this.overlaps(player)) player.hit(18 + campaignLevel * 2);
+        if (!player.dead && this.overlaps(player)) player.hit(18 + campaignLevel * 2 + this.combatTier * 2);
       }
+    }
+
+    enterCombatTier(tier) {
+      this.combatTier = tier;
+      this.phaseShield = 0.48;
+      this.attackTimer = Math.min(this.attackTimer, tier === 1 ? 0.62 : 0.42);
+      this.comboTimer = 0;
+      this.comboAttackName = null;
+      blastEffects.push(new BlastEffect(this.cx, this.cy, this.profile.accent, tier + 1));
+      burst(this.cx, this.cy, this.profile.accent, 18 + tier * 8, 250 + tier * 60);
+      addFloatingText(this.cx, this.y - 20, tier === 1 ? "OVERDRIVE" : "FINAL PATTERN", this.profile.accent, 17);
+      audio.tone(145 + tier * 90, 0.32, "sawtooth", 0.13, 220);
+    }
+
+    attackDefinition(name) {
+      const attackMap = {
+        horizontal: ["HIGH / LOW", () => this.horizontalBurst(), 0.58],
+        rain: ["VERTICAL STRIKE", () => this.verticalRain(), 0.68],
+        debris: ["IMPACT ZONES", () => this.overheadDrop(), 0.72],
+        cross: ["CROSS FIRE", () => this.crossFire(), 0.70],
+        laser: ["RAIL SWEEP", () => this.laserSweep(), 0.78],
+        wave: ["SHOCKWAVE", () => this.shockwave(), 0.72],
+        spiral: ["ENERGY RING", () => this.energyRing(), 0.76],
+        fan: ["HUNTER FAN", () => this.fanBurst(), 0.66],
+        summon: ["REINFORCEMENTS", () => this.summonMinions(), 0.78],
+        missiles: ["MISSILE LOCK", () => this.missileSalvo(), 0.76],
+        nova: ["CORE NOVA", () => this.novaPulse(), 0.82]
+      };
+      return attackMap[name] || attackMap.horizontal;
+    }
+
+    selectComboAttack(previousName) {
+      const attacks = this.profile.attacks;
+      if (!attacks || attacks.length < 2) return null;
+      for (let offset = 0; offset < attacks.length; offset++) {
+        const candidate = attacks[(this.attackMode + offset) % attacks.length];
+        if (candidate !== previousName && candidate !== "summon") return candidate;
+      }
+      return attacks[(this.attackMode + 1) % attacks.length];
+    }
+
+    beginBossAttack(name, combo = false) {
+      const entry = this.attackDefinition(name);
+      const duration = entry[2] * (combo ? 0.68 : 1);
+      this.telegraph(entry[0], () => {
+        entry[1]();
+        if (!combo && this.combatTier > 0 && !this.retreating) {
+          const comboEvery = this.combatTier >= 2 ? 2 : 3;
+          if (this.attackMode % comboEvery === 0) {
+            const followUp = this.selectComboAttack(name);
+            if (followUp) {
+              this.comboAttackName = followUp;
+              this.comboTimer = this.combatTier >= 2 ? 0.18 : 0.30;
+            }
+          }
+        }
+      }, duration);
     }
 
     telegraph(label, attack, duration) {
@@ -3077,13 +3248,13 @@
 
     horizontalBurst() {
       const laneY = terrainLaneY((this.arenaLeft + this.arenaRight) * 0.5, this.attackMode % 2 !== 0);
-      const count = 2 + campaignLevel;
+      const count = 2 + campaignLevel + this.combatTier;
       for (let i = 0; i < count; i++) enemyBullets.push(new EnemyBullet(this.x + 10 + i * 42, laneY, -300 - campaignLevel * 30, 0, (13 + campaignLevel) * difficulty, 12, this.profile.accent));
       audio.boss();
     }
 
     verticalRain() {
-      const count = 3 + campaignLevel * 2;
+      const count = 3 + campaignLevel * 2 + this.combatTier * 2;
       const width = this.arenaRight - this.arenaLeft - 180;
       const shift = this.attackMode % 2 ? 70 : 0;
       for (let i = 0; i < count; i++) {
@@ -3094,7 +3265,7 @@
     }
 
     overheadDrop() {
-      const count = 4 + campaignLevel;
+      const count = 4 + campaignLevel + this.combatTier;
       const width = this.arenaRight - this.arenaLeft - 220;
       const shift = this.attackMode % 2 ? 85 : 0;
       for (let i = 0; i < count; i++) {
@@ -3115,13 +3286,18 @@
 
     laserSweep() {
       const y = terrainLaneY((this.arenaLeft + this.arenaRight) * 0.5, true) - 14;
-      for (let i = 0; i < 6; i++) enemyBullets.push(new EnemyBullet(this.arenaRight - 40 + i * 60, y, -410, 0, 15 * difficulty, 15, this.profile.accent));
+      const beams = 6 + this.combatTier * 2;
+      for (let i = 0; i < beams; i++) enemyBullets.push(new EnemyBullet(this.arenaRight - 40 + i * 60, y, -410 - this.combatTier * 25, 0, (15 + this.combatTier) * difficulty, 15, this.profile.accent));
+      if (this.combatTier >= 2) {
+        const highY = terrainLaneY((this.arenaLeft + this.arenaRight) * 0.5, false);
+        for (let i = 0; i < 5; i++) enemyBullets.push(new EnemyBullet(this.arenaRight + 130 + i * 72, highY, -455, 0, 17 * difficulty, 13, this.profile.accent));
+      }
       audio.tone(95, 0.22, "sawtooth", 0.12, 180);
     }
 
     shockwave() {
       const groundY = terrainLaneY((this.arenaLeft + this.arenaRight) * 0.5, true) - 3;
-      const count = 3 + Math.floor(campaignLevel / 2);
+      const count = 3 + Math.floor(campaignLevel / 2) + this.combatTier;
       for (let i = 0; i < count; i++) {
         const speed = 270 + i * 48 + campaignLevel * 15;
         enemyBullets.push(new EnemyBullet(this.cx - 40, groundY, -speed, 0, (14 + campaignLevel) * difficulty, 15, this.profile.accent));
@@ -3132,7 +3308,7 @@
     }
 
     energyRing() {
-      const count = 10 + Math.min(4, campaignLevel);
+      const count = 10 + Math.min(4, campaignLevel) + this.combatTier * 2;
       const gap = this.attackMode % count;
       for (let i = 0; i < count; i++) {
         if (i === gap || i === (gap + 1) % count) continue;
@@ -3147,7 +3323,7 @@
       const target = this.target();
       if (!target) return;
       const base = Math.atan2(target.cy - this.cy, target.cx - this.cx);
-      const count = campaignLevel >= 4 ? 7 : 5;
+      const count = (campaignLevel >= 4 ? 7 : 5) + this.combatTier * 2;
       for (let i = 0; i < count; i++) {
         if (i === Math.floor(count / 2) && this.attackMode % 2 === 0) continue;
         const offset = (i - (count - 1) / 2) * 0.13;
@@ -3164,7 +3340,7 @@
       ];
       const types = sets[campaignLevel] || sets[0];
       const living = enemies.filter(enemy => !enemy.dead && enemy.x > this.arenaLeft && enemy.x < this.arenaRight).length;
-      if (living > 5) { this.fanBurst(); return; }
+      if (living > 5 + this.combatTier) { this.fanBurst(); return; }
       types.forEach((type, index) => {
         const x = clamp(this.arenaRight - 270 - index * 120, this.arenaLeft + 180, this.arenaRight - 160);
         const y = ["jet", "drone", "orb", "bomber", "specter"].includes(type) ? terrainSurfaceY(x) - 300 - index * 35 : null;
@@ -3176,7 +3352,7 @@
 
     missileSalvo() {
       const livingPlayers = players.filter(player => !player.dead);
-      const count = Math.min(3, campaignLevel >= 3 ? 3 : 2);
+      const count = Math.min(4, (campaignLevel >= 3 ? 3 : 2) + this.combatTier);
       for (let i = 0; i < count; i++) {
         const target = livingPlayers[i % Math.max(1, livingPlayers.length)] || this.target();
         enemyBullets.push(new BossMissile(
@@ -3192,7 +3368,7 @@
     }
 
     novaPulse() {
-      const count = 16;
+      const count = 16 + this.combatTier * 2;
       const gap = (this.attackMode * 3) % count;
       for (let i = 0; i < count; i++) {
         if (Math.abs(i - gap) <= 1 || Math.abs(i - gap) >= count - 1) continue;
@@ -3240,17 +3416,168 @@
       drawBossForm(this.profile, this.phase, warning);
       ctx.globalAlpha = 1;
       if (this.telegraphLabel) {
-        ctx.font = `900 18px ${UI_FONT}`;
+        ctx.font = `900 13px ${UI_FONT}`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        const labelWidth = ctx.measureText(this.telegraphLabel).width + 18;
+        const labelWidth = ctx.measureText(this.telegraphLabel).width + 14;
         ctx.fillStyle = "#12070a";
-        ctx.fillRect(-labelWidth / 2, -this.h / 2 - 50, labelWidth, 26);
+        ctx.fillRect(-labelWidth / 2, -this.h / 2 - 43, labelWidth, 20);
         ctx.strokeStyle = this.profile.accent;
         ctx.lineWidth = 3;
-        ctx.strokeRect(-labelWidth / 2, -this.h / 2 - 50, labelWidth, 26);
+        ctx.strokeRect(-labelWidth / 2, -this.h / 2 - 43, labelWidth, 20);
         ctx.fillStyle = "#fff36d";
-        ctx.fillText(this.telegraphLabel, 0, -this.h / 2 - 37);
+        ctx.fillText(this.telegraphLabel, 0, -this.h / 2 - 33);
+      }
+      ctx.restore();
+    }
+  }
+
+  class RivalHunter extends StageBoss {
+    constructor(stage, x, finalEncounter = false) {
+      super("reignHunter", x);
+      const gadget = RIVAL_GADGETS[clamp(stage | 0, 0, RIVAL_GADGETS.length - 1)];
+      this.stage = clamp(stage | 0, 0, RIVAL_GADGETS.length - 1);
+      this.finalEncounter = Boolean(finalEncounter);
+      this.key = this.finalEncounter ? "reignHunterFinal" : `reignHunter${this.stage}`;
+      this.profile = {
+        ...BOSS_PROFILES.reignHunter,
+        name: this.finalEncounter ? "REIGN HUNTER • FINAL RIG" : "REIGN HUNTER",
+        gadget: gadget.id,
+        accent: gadget.accent,
+        attacks: this.finalEncounter
+          ? RIVAL_GADGETS.flatMap(item => item.attacks).filter((name, index, all) => all.indexOf(name) === index)
+          : [...gadget.attacks],
+        cadence: this.finalEncounter ? 2.05 : Math.max(1.75, 2.35 - this.stage * 0.08),
+        reward: this.finalEncounter ? ["health", "special"] : null,
+        checkpoint: this.finalEncounter ? 49900 : null
+      };
+      this.name = this.profile.name;
+      this.maxHealth = (this.finalEncounter ? 3850 : 620 + this.stage * 170) * difficulty * (coop ? 1.32 : 1);
+      this.health = this.maxHealth;
+      this.score = this.finalEncounter ? 24500 : 1100 + this.stage * 350;
+      this.arenaLock = this.finalEncounter;
+      this.hudHidden = false;
+      this.retreating = false;
+      this.retreatTimer = 0;
+      this.duration = this.finalEncounter ? Infinity : 8.8 + this.stage * 0.45;
+      this.exitX = x + Math.max(980, 1320 - this.stage * 45);
+      this.baseX = x;
+      this.attackTimer = this.finalEncounter ? 1.0 : 0.72;
+      this.introTimer = this.finalEncounter ? 1.0 : 0.55;
+      this.combatTier = this.finalEncounter ? 0 : Math.min(1, Math.floor(this.stage / 3));
+
+      if (this.finalEncounter) {
+        const zone = WORLD_ZONES[5];
+        const width = Math.max(1560, baseVisibleWorldW * (portrait ? 1.18 : 1.22) + 420);
+        this.arenaRight = Math.min(zone.end - 80, x + 620);
+        this.arenaLeft = Math.max(zone.start + 90, this.arenaRight - width);
+      }
+    }
+
+    update(dt) {
+      if (this.retreating) {
+        this.phase += dt;
+        this.retreatTimer -= dt;
+        this.x += (430 + this.stage * 24) * dt;
+        this.y -= (180 + this.stage * 12) * dt;
+        if (this.retreatTimer <= 0 && activeBoss === this) activeBoss = null;
+        return;
+      }
+
+      if (this.finalEncounter) {
+        const tier = clamp(this.combatTier, 0, 2);
+        const phaseGadget = tier >= 2 ? RIVAL_GADGETS[5] : tier === 1 ? RIVAL_GADGETS[4] : RIVAL_GADGETS[2];
+        this.profile.gadget = phaseGadget.id;
+        this.profile.accent = phaseGadget.accent;
+        this.profile.attacks = tier >= 2
+          ? [...RIVAL_GADGETS[5].attacks]
+          : tier === 1
+            ? [...RIVAL_GADGETS[4].attacks, "laser"]
+            : [...RIVAL_GADGETS[2].attacks];
+        super.update(dt);
+        return;
+      }
+
+      const target = this.target();
+      if (!target) return;
+      if (this.introTimer <= 0) this.duration -= dt;
+
+      const desiredX = clamp(
+        Math.max(this.baseX, target.cx + visibleWorldW * 0.48),
+        target.cx + 420,
+        Math.min(LEVEL_W - this.w - 100, target.cx + visibleWorldW * 0.72)
+      );
+      this.x += (desiredX - this.x) * (1 - Math.exp(-3.6 * dt));
+      this.baseY = terrainSurfaceY(this.cx) - this.h - 165 - Math.sin(this.phase * 0.6) * 18;
+
+      if (this.duration <= 0 || target.cx >= this.exitX) {
+        this.beginRetreat(false);
+        return;
+      }
+
+      super.update(dt);
+    }
+
+    beginRetreat(damagedOut, owner = 0) {
+      if (this.retreating) return;
+      this.retreating = true;
+      this.retreatTimer = 1.15;
+      this.hudHidden = true;
+      this.pendingAttack = null;
+      this.telegraphTimer = 0;
+      this.comboTimer = 0;
+      this.comboAttackName = null;
+      this.health = Math.max(0, this.health);
+      burst(this.cx, this.cy, this.profile.accent, damagedOut ? 24 : 13, damagedOut ? 280 : 190);
+      blastEffects.push(new BlastEffect(this.cx, this.cy, this.profile.accent, damagedOut ? 2 : 1));
+      audio.tone(260, 0.24, "sawtooth", 0.11, 260);
+
+      if (damagedOut) {
+        if (players[owner]) players[owner].score += this.score;
+        addFloatingText(this.cx, this.y - 12, "+BREAK", this.profile.accent, 18);
+        if (this.stage === 1 || this.stage === 3) {
+          spawnPickup(this.cx - 20, terrainSurfaceY(this.cx) - 78, "health", true);
+        } else if (this.stage === 4) {
+          spawnPickup(this.cx - 20, terrainSurfaceY(this.cx) - 78, "special", true);
+        }
+      } else {
+        addFloatingText(this.cx, this.y - 12, "ESCAPED", this.profile.accent, 16);
+      }
+    }
+
+    hit(damage, owner) {
+      if (this.finalEncounter) {
+        super.hit(damage, owner);
+        return;
+      }
+      if (this.introTimer > 0 || this.retreating) return;
+      this.health -= damage;
+      this.flashTimer = 0.065;
+      burst(rand(this.x, this.x + this.w), rand(this.y, this.y + this.h), "#ffe081", 3, 145);
+      if (damage >= 45) impactFeedback(0.018);
+      if (this.health <= 0) this.beginRetreat(true, owner);
+    }
+
+    draw() {
+      ctx.save();
+      if (this.retreating) ctx.globalAlpha = clamp(this.retreatTimer / 0.85, 0, 1);
+      ctx.translate(this.cx, this.cy);
+      if (this.retreating) ctx.rotate(-0.18);
+      if (this.flashTimer > 0) ctx.globalAlpha *= 0.62;
+      drawBossForm(this.profile, this.phase, this.telegraphTimer > 0 && Math.floor(this.telegraphTimer * 10) % 2 === 0);
+      ctx.globalAlpha = 1;
+      if (!this.retreating && this.telegraphLabel) {
+        ctx.font = `900 12px ${UI_FONT}`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        const labelWidth = ctx.measureText(this.telegraphLabel).width + 14;
+        ctx.fillStyle = "#12070a";
+        ctx.fillRect(-labelWidth / 2, -this.h / 2 - 40, labelWidth, 18);
+        ctx.strokeStyle = this.profile.accent;
+        ctx.lineWidth = 2.5;
+        ctx.strokeRect(-labelWidth / 2, -this.h / 2 - 40, labelWidth, 18);
+        ctx.fillStyle = "#fff36d";
+        ctx.fillText(this.telegraphLabel, 0, -this.h / 2 - 31);
       }
       ctx.restore();
     }
@@ -3447,43 +3774,46 @@
     drawOverlay() {
       const width = screenW;
       const height = screenH;
-      const reveal = clamp(this.elapsed / 0.55, 0, 1);
-      const exit = clamp(this.life / 0.55, 0, 1);
+      const reveal = clamp(this.elapsed / 0.45, 0, 1);
+      const exit = clamp(this.life / 0.45, 0, 1);
       const alpha = Math.min(reveal, exit);
-      const barH = Math.max(24, Math.round(height * 0.085));
+      const victoryTitle = this.final ? "MISSION COMPLETE" : this.major ? "GUARDIAN DOWN" : "BOSS DOWN";
 
       ctx.save();
       ctx.globalAlpha = alpha;
-      ctx.fillStyle = "rgba(0,0,0,.82)";
-      ctx.fillRect(0, 0, width, barH);
-      ctx.fillRect(0, height - barH, width, barH);
+      const panelW = Math.min(width * 0.76, 470);
+      const panelH = 92;
+      const x = width / 2 - panelW / 2;
+      const y = Math.max(16 + safeTop, height * 0.12);
+      drawPixelPanel(x, y, panelW, panelH, "rgba(5,13,23,.94)", this.final ? "#fff36d" : this.profile.accent, true);
 
-      const titleY = height * 0.26;
-      const victoryTitle = this.final ? "MISSION COMPLETE" : this.major ? "LEVEL GUARDIAN DOWN" : "BOSS DESTROYED";
-      const titleSize = Math.max(20, Math.min(this.major ? 48 : 54, Math.round(width * (this.major ? 0.046 : 0.055))));
-      ctx.font = `900 ${titleSize}px ${UI_FONT}`;
-      ctx.textAlign = "center";
+      drawUiIcon(this.final ? "special" : "check", x + 35, y + 33, 23, this.final ? "#fff36d" : this.profile.accent, 3);
+      ctx.textAlign = "left";
       ctx.textBaseline = "middle";
-      ctx.fillStyle = "#090b12";
-      ctx.fillText(victoryTitle, width / 2 + 4, titleY + 4);
-      ctx.fillStyle = this.final ? "#fff36d" : this.profile.accent;
-      ctx.fillText(victoryTitle, width / 2, titleY);
+      ctx.fillStyle = this.final ? "#fff36d" : "#f4f1d0";
+      ctx.font = `900 ${fitCanvasText(victoryTitle, panelW - 92, 22, 14)}px ${UI_FONT}`;
+      ctx.fillText(victoryTitle, x + 67, y + 25);
+      ctx.fillStyle = "#9db3bd";
+      ctx.font = `800 ${fitCanvasText(this.name, panelW - 92, 10, 8)}px ${UI_FONT}`;
+      ctx.fillText(this.name, x + 67, y + 46);
 
-      const subSize = Math.max(13, Math.min(25, Math.round(width * 0.025)));
-      ctx.font = `900 ${subSize}px ${UI_FONT}`;
-      ctx.fillStyle = "#f5f7fb";
-      ctx.fillText(this.name, width / 2, titleY + titleSize * 0.92);
+      const metricY = y + 70;
+      drawUiIcon("score", x + 70, metricY, 9, "#63e5ff", 1.5);
+      ctx.fillStyle = "#dce8ee";
+      ctx.font = `800 9px ${UI_FONT}`;
+      ctx.fillText(`+${this.bossScore}`, x + 81, metricY + 0.5);
+      drawUiIcon("special", x + 150, metricY, 9, "#fff36d", 1.4);
       ctx.fillStyle = "#fff36d";
-      ctx.fillText(`BOSS +${this.bossScore}  •  VICTORY +${this.bonus}`, width / 2, titleY + titleSize * 1.48);
+      ctx.fillText(`+${this.bonus}`, x + 161, metricY + 0.5);
 
       if (this.major && this.elapsed > 1.15) {
-        const medalY = height * 0.57;
-        const radius = Math.max(24, Math.min(52, width * 0.045));
+        const medalY = height * 0.58;
+        const radius = Math.max(20, Math.min(38, width * 0.038));
         ctx.save();
         ctx.translate(width / 2, medalY);
         ctx.rotate(Math.sin(this.medalSpin) * 0.09);
         ctx.strokeStyle = this.profile.accent;
-        ctx.lineWidth = Math.max(4, radius * 0.13);
+        ctx.lineWidth = Math.max(3, radius * 0.12);
         ctx.strokeRect(-radius, -radius, radius * 2, radius * 2);
         ctx.rotate(Math.PI / 4);
         ctx.strokeStyle = "#fff36d";
@@ -3647,7 +3977,7 @@
         ctx.beginPath(); ctx.ellipse(0, y, 24 - Math.abs(y) * 0.25, 7, 0, 0, Math.PI * 2); ctx.stroke();
       }
       ctx.globalAlpha = 1;
-      ctx.fillStyle = "#fff36d"; ctx.font = `900 13px ${UI_FONT}`; ctx.textAlign = "center"; ctx.fillText("DOWN", 0, 75);
+      drawUiIcon("down", 0, 74, 17, "#fff36d", 2.4);
       ctx.restore();
     }
   }
@@ -3690,12 +4020,12 @@
         if (!player.dead && this.overlaps(player) && player.upgrade(this.type)) {
           this.dead = true;
           const message = this.type === "health"
-            ? "ENERGY +50"
+            ? "+50"
             : this.type === "special"
-              ? "IRON TEMPEST +1"
-              : `${this.name()} SHOT!`;
+              ? "+1 STRIKE"
+              : this.name();
           showBanner(message);
-          addFloatingText(this.cx, this.y - 18, message, this.color(), 20);
+          addFloatingText(this.cx, this.y - 18, message, this.color(), 16);
           impactFeedback(0.025);
           burst(this.cx, this.cy, this.color(), 12, 180);
           break;
@@ -3814,19 +4144,6 @@
         ctx.restore();
       }
 
-      const label = this.name();
-      ctx.font = `900 16px ${UI_FONT}`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      const labelWidth = ctx.measureText(label).width + 16;
-      ctx.fillStyle = "rgba(3,8,16,.88)";
-      roundRect(-labelWidth / 2, -45, labelWidth, 22, 8);
-      ctx.fill();
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 2;
-      ctx.stroke();
-      ctx.fillStyle = "#ffffff";
-      ctx.fillText(label, 0, -34);
       ctx.restore();
     }
   }
@@ -4562,7 +4879,7 @@
     }],
     [4250, () => startBoss("cityWalker", 4820)],
     [5260, () => { checkpointX = 5350; }],
-    [6400, () => showBanner("INDUSTRIAL DISTRICT")],
+    [6400, () => startRival(0, 6750)],
     [7180, () => {
       checkpointX = 7180; showBanner("HIGHWAY COLLAPSE");
       for (let i = 0; i < 5; i++) debris.push(new FallingDebris(7540 + i * 150, cameraY - 110, rand(28, 44), true));
@@ -4572,7 +4889,7 @@
     [10900, () => showBanner("NEON ASCENT")],
     [12100, () => { checkpointX = 12100; showBanner("SKYBRIDGE CHECKPOINT"); }],
     [13350, () => startBoss("neonGunship", 13820)],
-    [14500, () => showBanner("FORTRESS INTERIOR")],
+    [14500, () => startRival(1, 14920)],
     [15700, () => {
       for (let i = 0; i < 6; i++) debris.push(new FallingDebris(16020 + i * 130, cameraY - 100, 32, true));
     }],
@@ -4583,9 +4900,7 @@
     [20700, () => { checkpointX = 20700; showBanner("CORE ACCESS"); }],
     [21950, () => startBoss("orbitMantis", 22420)],
     [23200, () => showBanner("REACTOR SPINE")],
-    [24400, () => {
-      for (let i = 0; i < 7; i++) debris.push(new FallingDebris(24720 + i * 120, cameraY - 110, 36, true));
-    }],
+    [24400, () => startRival(2, 24820)],
     [25550, () => { checkpointX = 25550; showBanner("FINAL APPROACH"); }],
     [26400, () => startBoss("orbitCore", 26820)],
 
@@ -4593,9 +4908,7 @@
     [29400, () => { checkpointX = 29400; showBanner("CANOPY ASCENT"); }],
     [30900, () => startBoss("bioHydra", 31480)],
     [32100, () => showBanner("LEVIATHAN NEST")],
-    [33450, () => {
-      for (let i = 0; i < 6; i++) debris.push(new FallingDebris(33720 + i * 135, cameraY - 110, 38, true));
-    }],
+    [33450, () => startRival(3, 33820)],
     [34450, () => { checkpointX = 34450; showBanner("FORGE HEART"); }],
     [35150, () => startBoss("bioLeviathan", 35720)],
 
@@ -4603,15 +4916,13 @@
     [38400, () => { checkpointX = 38400; showBanner("WHITEOUT RAVINE"); }],
     [39600, () => startBoss("frostCarrier", 40180)],
     [40950, () => showBanner("ABSOLUTE ZERO LINE")],
-    [42100, () => {
-      for (let i = 0; i < 7; i++) debris.push(new FallingDebris(42420 + i * 125, cameraY - 120, 40, true));
-    }],
+    [42100, () => startRival(4, 42520)],
     [43300, () => { checkpointX = 43300; showBanner("TITAN TERMINAL"); }],
     [44150, () => startBoss("frostTitan", 44680)],
 
     [46000, () => showBanner("TIMEFALL CHASM")],
     [47200, () => { checkpointX = 47200; showBanner("SHIFTING BRIDGES"); }],
-    [48750, () => startBoss("chronoSerpent", 49340)],
+    [48750, () => startRival(5, 49340, true)],
     [50100, () => showBanner("CITADEL CLOCKWORK")],
     [51400, () => {
       for (let i = 0; i < 8; i++) debris.push(new FallingDebris(51700 + i * 120, cameraY - 125, 42, true));
@@ -4926,11 +5237,21 @@
     startStageIntro(index, "onfoot", entryX, false);
   }
 
+  function startRival(stage, x, finalEncounter = false) {
+    const key = finalEncounter ? "reignHunterFinal" : `reignHunter${stage}`;
+    if (activeBoss || defeatedBosses.has(key)) return false;
+    const gadget = RIVAL_GADGETS[clamp(stage | 0, 0, RIVAL_GADGETS.length - 1)];
+    showBanner(finalEncounter ? "HUNTER • FINAL RIG" : `HUNTER • ${gadget.label}`);
+    activeBoss = new RivalHunter(stage, x, finalEncounter);
+    return true;
+  }
+
   function startBoss(key, x) {
-    if (activeBoss || defeatedBosses.has(key)) return;
+    if (activeBoss || defeatedBosses.has(key)) return false;
     const profile = BOSS_PROFILES[key];
     showBanner(`WARNING • ${profile.name}`);
     activeBoss = new StageBoss(key, x);
+    return true;
   }
 
   function runScripts() {
@@ -4938,8 +5259,8 @@
 
     for (let i = 0; i < scripts.length; i++) {
       if (lead >= scripts[i][0] && !triggered.has(i)) {
-        triggered.add(i);
-        scripts[i][1]();
+        const result = scripts[i][1]();
+        if (result !== false) triggered.add(i);
       }
     }
   }
@@ -5230,7 +5551,7 @@
       if (lead > 0) desiredX = Math.max(cameraTargetX, lead - visibleWorldW * 0.34);
     }
 
-    if (activeBoss && !activeBoss.dead) {
+    if (activeBoss && !activeBoss.dead && activeBoss.arenaLock !== false) {
       const arenaWidth = activeBoss.arenaRight - activeBoss.arenaLeft;
       const rightPadding = portrait ? 48 : 82;
       const framedX = activeBoss.x + activeBoss.w - visibleWorldW + rightPadding;
@@ -5322,8 +5643,8 @@
     audio.stopMusic();
     const score = players.reduce((sum, player) => sum + player.score, 0);
     menuResult = win
-      ? `CAMPAIGN COMPLETE • SQUAD SCORE ${String(score).padStart(6, "0")}`
-      : `MISSION FAILED • SQUAD SCORE ${String(score).padStart(6, "0")}`;
+      ? `COMPLETE • ${String(score).padStart(6, "0")}`
+      : `FAILED • ${String(score).padStart(6, "0")}`;
     levelState = "menu";
     updateLevelSelectionPreview();
     resize();
@@ -5334,7 +5655,10 @@
     paused = !paused;
     if (paused) clearControls();
     audio.setMusicPaused(paused);
-    showBanner(paused ? "PAUSED" : "RESUME");
+    if (paused) {
+      bannerText = "";
+      bannerUntil = 0;
+    }
   }
 
   function showBanner(text, duration = 1.4) {
@@ -5809,10 +6133,7 @@
     }
 
     if (platform.triggered) {
-      ctx.fillStyle = "#fff36d";
-      ctx.font = `900 16px ${UI_FONT}`;
-      ctx.textAlign = "center";
-      ctx.fillText("DROP!", platform.x + platform.w / 2, platform.y - 10);
+      drawUiIcon("down", platform.x + platform.w / 2, platform.y - 12, 16, "#fff36d", 2.3);
     }
   }
 
@@ -5946,134 +6267,394 @@
     ctx.closePath(); ctx.fill();
   }
 
+
+  function drawUiIcon(type, cx, cy, size, color = "#ffffff", lineWidth = 2) {
+    const s = Math.max(4, size);
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = Math.max(1.4, lineWidth);
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    if (type === "play") {
+      ctx.beginPath();
+      ctx.moveTo(-s * 0.28, -s * 0.42);
+      ctx.lineTo(s * 0.46, 0);
+      ctx.lineTo(-s * 0.28, s * 0.42);
+      ctx.closePath();
+      ctx.fill();
+    } else if (type === "pause") {
+      ctx.fillRect(-s * 0.32, -s * 0.42, s * 0.20, s * 0.84);
+      ctx.fillRect(s * 0.12, -s * 0.42, s * 0.20, s * 0.84);
+    } else if (type === "coop") {
+      ctx.beginPath();
+      ctx.arc(-s * 0.22, -s * 0.18, s * 0.18, 0, Math.PI * 2);
+      ctx.arc(s * 0.24, -s * 0.14, s * 0.15, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(-s * 0.22, s * 0.35, s * 0.35, Math.PI, Math.PI * 2);
+      ctx.arc(s * 0.24, s * 0.34, s * 0.29, Math.PI, Math.PI * 2);
+      ctx.stroke();
+    } else if (type === "music") {
+      ctx.beginPath();
+      ctx.moveTo(-s * 0.05, -s * 0.38);
+      ctx.lineTo(s * 0.34, -s * 0.49);
+      ctx.lineTo(s * 0.34, s * 0.20);
+      ctx.moveTo(-s * 0.05, -s * 0.31);
+      ctx.lineTo(-s * 0.05, s * 0.30);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.ellipse(-s * 0.20, s * 0.32, s * 0.20, s * 0.14, -0.18, 0, Math.PI * 2);
+      ctx.ellipse(s * 0.20, s * 0.20, s * 0.20, s * 0.14, -0.18, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (type === "fullscreen") {
+      const a = s * 0.42;
+      const b = s * 0.12;
+      ctx.beginPath();
+      ctx.moveTo(-b, -a); ctx.lineTo(-a, -a); ctx.lineTo(-a, -b);
+      ctx.moveTo(b, -a); ctx.lineTo(a, -a); ctx.lineTo(a, -b);
+      ctx.moveTo(-a, b); ctx.lineTo(-a, a); ctx.lineTo(-b, a);
+      ctx.moveTo(a, b); ctx.lineTo(a, a); ctx.lineTo(b, a);
+      ctx.stroke();
+    } else if (type === "heart") {
+      ctx.beginPath();
+      ctx.moveTo(0, s * 0.42);
+      ctx.bezierCurveTo(-s * 0.52, s * 0.08, -s * 0.48, -s * 0.38, -s * 0.20, -s * 0.38);
+      ctx.bezierCurveTo(-s * 0.04, -s * 0.38, 0, -s * 0.24, 0, -s * 0.18);
+      ctx.bezierCurveTo(0, -s * 0.24, s * 0.04, -s * 0.38, s * 0.20, -s * 0.38);
+      ctx.bezierCurveTo(s * 0.48, -s * 0.38, s * 0.52, s * 0.08, 0, s * 0.42);
+      ctx.fill();
+    } else if (type === "life") {
+      ctx.beginPath();
+      ctx.arc(0, -s * 0.18, s * 0.22, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(0, s * 0.38, s * 0.36, Math.PI, Math.PI * 2);
+      ctx.stroke();
+    } else if (type === "special") {
+      ctx.beginPath();
+      for (let i = 0; i < 10; i++) {
+        const radius = i % 2 ? s * 0.20 : s * 0.46;
+        const angle = -Math.PI / 2 + i * Math.PI / 5;
+        const x = Math.cos(angle) * radius;
+        const y = Math.sin(angle) * radius;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.fill();
+    } else if (type === "score") {
+      ctx.beginPath();
+      ctx.moveTo(0, -s * 0.44);
+      ctx.lineTo(s * 0.38, 0);
+      ctx.lineTo(0, s * 0.44);
+      ctx.lineTo(-s * 0.38, 0);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.beginPath(); ctx.arc(0, 0, s * 0.10, 0, Math.PI * 2); ctx.fill();
+    } else if (type === "strike") {
+      ctx.beginPath();
+      for (let i = 0; i < 12; i++) {
+        const radius = i % 2 ? s * 0.23 : s * 0.48;
+        const angle = i * Math.PI / 6;
+        const x = Math.cos(angle) * radius;
+        const y = Math.sin(angle) * radius;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = "rgba(0,0,0,.34)";
+      ctx.fillRect(-s * 0.13, -s * 0.14, s * 0.26, s * 0.28);
+    } else if (type === "fire") {
+      ctx.beginPath(); ctx.arc(0, 0, s * 0.28, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(-s * 0.50, 0); ctx.lineTo(-s * 0.22, 0);
+      ctx.moveTo(s * 0.22, 0); ctx.lineTo(s * 0.50, 0);
+      ctx.moveTo(0, -s * 0.50); ctx.lineTo(0, -s * 0.22);
+      ctx.moveTo(0, s * 0.22); ctx.lineTo(0, s * 0.50);
+      ctx.stroke();
+      ctx.beginPath(); ctx.arc(0, 0, s * 0.08, 0, Math.PI * 2); ctx.fill();
+    } else if (type === "jump") {
+      ctx.beginPath();
+      ctx.moveTo(0, -s * 0.48);
+      ctx.lineTo(-s * 0.34, -s * 0.10);
+      ctx.moveTo(0, -s * 0.48);
+      ctx.lineTo(s * 0.34, -s * 0.10);
+      ctx.moveTo(0, -s * 0.42);
+      ctx.lineTo(0, s * 0.32);
+      ctx.moveTo(-s * 0.28, s * 0.42);
+      ctx.lineTo(s * 0.28, s * 0.42);
+      ctx.stroke();
+    } else if (type === "down") {
+      ctx.beginPath();
+      ctx.moveTo(0, s * 0.48);
+      ctx.lineTo(-s * 0.34, s * 0.10);
+      ctx.moveTo(0, s * 0.48);
+      ctx.lineTo(s * 0.34, s * 0.10);
+      ctx.moveTo(0, s * 0.42);
+      ctx.lineTo(0, -s * 0.34);
+      ctx.stroke();
+    } else if (type === "move") {
+      ctx.beginPath();
+      ctx.moveTo(-s * 0.48, 0); ctx.lineTo(s * 0.48, 0);
+      ctx.moveTo(-s * 0.48, 0); ctx.lineTo(-s * 0.25, -s * 0.22);
+      ctx.moveTo(-s * 0.48, 0); ctx.lineTo(-s * 0.25, s * 0.22);
+      ctx.moveTo(s * 0.48, 0); ctx.lineTo(s * 0.25, -s * 0.22);
+      ctx.moveTo(s * 0.48, 0); ctx.lineTo(s * 0.25, s * 0.22);
+      ctx.stroke();
+    } else if (type === "check") {
+      ctx.beginPath();
+      ctx.moveTo(-s * 0.42, 0);
+      ctx.lineTo(-s * 0.10, s * 0.32);
+      ctx.lineTo(s * 0.48, -s * 0.38);
+      ctx.stroke();
+    } else if (type === "next") {
+      ctx.beginPath();
+      ctx.moveTo(-s * 0.42, -s * 0.32);
+      ctx.lineTo(s * 0.06, 0);
+      ctx.lineTo(-s * 0.42, s * 0.32);
+      ctx.moveTo(s * 0.02, -s * 0.32);
+      ctx.lineTo(s * 0.48, 0);
+      ctx.lineTo(s * 0.02, s * 0.32);
+      ctx.stroke();
+    } else if (type === "warning") {
+      ctx.beginPath();
+      ctx.moveTo(0, -s * 0.48);
+      ctx.lineTo(s * 0.46, s * 0.38);
+      ctx.lineTo(-s * 0.46, s * 0.38);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, -s * 0.18); ctx.lineTo(0, s * 0.12); ctx.stroke();
+      ctx.beginPath(); ctx.arc(0, s * 0.26, s * 0.05, 0, Math.PI * 2); ctx.fill();
+    } else if (type === "lock") {
+      ctx.strokeRect(-s * 0.32, -s * 0.02, s * 0.64, s * 0.46);
+      ctx.beginPath();
+      ctx.arc(0, -s * 0.04, s * 0.24, Math.PI, 0);
+      ctx.stroke();
+      ctx.beginPath(); ctx.arc(0, s * 0.18, s * 0.06, 0, Math.PI * 2); ctx.fill();
+    } else if (type === "keyboard") {
+      ctx.strokeRect(-s * 0.48, -s * 0.32, s * 0.96, s * 0.64);
+      for (let row = -1; row <= 1; row++) {
+        for (let col = -2; col <= 2; col++) {
+          ctx.fillRect(col * s * 0.15 - s * 0.04, row * s * 0.14 - s * 0.03, s * 0.08, s * 0.06);
+        }
+      }
+    } else if (type === "weapon0") {
+      ctx.fillRect(-s * 0.42, -s * 0.12, s * 0.68, s * 0.22);
+      ctx.fillRect(-s * 0.02, s * 0.08, s * 0.18, s * 0.28);
+      ctx.fillRect(s * 0.27, -s * 0.06, s * 0.21, s * 0.10);
+    } else if (type === "weapon1") {
+      ctx.beginPath();
+      ctx.moveTo(-s * 0.40, 0); ctx.lineTo(s * 0.42, 0);
+      ctx.moveTo(-s * 0.34, -s * 0.12); ctx.lineTo(s * 0.34, -s * 0.32);
+      ctx.moveTo(-s * 0.34, s * 0.12); ctx.lineTo(s * 0.34, s * 0.32);
+      ctx.stroke();
+    } else if (type === "weapon2") {
+      ctx.beginPath();
+      ctx.moveTo(-s * 0.42, -s * 0.24); ctx.lineTo(-s * 0.06, 0); ctx.lineTo(-s * 0.42, s * 0.24);
+      ctx.moveTo(-s * 0.02, -s * 0.24); ctx.lineTo(s * 0.34, 0); ctx.lineTo(-s * 0.02, s * 0.24);
+      ctx.stroke();
+    } else if (type === "weapon3") {
+      ctx.beginPath();
+      ctx.moveTo(s * 0.44, 0); ctx.lineTo(-s * 0.08, -s * 0.20); ctx.lineTo(-s * 0.28, 0); ctx.lineTo(-s * 0.08, s * 0.20); ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(-s * 0.28, -s * 0.10); ctx.lineTo(-s * 0.46, -s * 0.26);
+      ctx.moveTo(-s * 0.28, s * 0.10); ctx.lineTo(-s * 0.46, s * 0.26);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawMenuIconButton(rect, icon, active, fill, edge, label = "") {
+    drawPixelPanel(rect.x, rect.y, rect.w, rect.h, active ? fill : "#0a1421", active ? "#fff36d" : edge, false);
+    const iconX = label ? rect.x + rect.h * 0.55 : rect.x + rect.w / 2;
+    drawUiIcon(icon, iconX, rect.y + rect.h / 2, Math.min(rect.h * 0.48, 23), active ? "#fff36d" : edge, 2.2);
+    if (label) {
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = active ? "#ffffff" : "#dce8ee";
+      ctx.font = `800 ${Math.min(12, rect.h * 0.26)}px ${UI_FONT}`;
+      ctx.fillText(label, rect.x + rect.h * 0.96, rect.y + rect.h / 2 + 0.5);
+    }
+  }
+
+  function drawControlLegend(centerX, y, compact) {
+    const gap = compact ? 34 : 40;
+    const radius = compact ? 10 : 11;
+    const items = [
+      ["move", ""],
+      ["strike", "A"],
+      ["fire", "B"],
+      ["jump", "C"]
+    ];
+    const startX = centerX - gap * 1.5;
+    items.forEach(([icon, key], index) => {
+      const x = startX + gap * index;
+      ctx.fillStyle = "rgba(9,20,34,.92)";
+      ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = "#4f6b7e"; ctx.lineWidth = 1.4; ctx.stroke();
+      drawUiIcon(icon, x, y, radius * 0.92, index === 0 ? "#63e5ff" : "#dce8ee", 1.6);
+      if (key) {
+        ctx.fillStyle = "#fff36d";
+        ctx.font = `800 ${compact ? 7 : 8}px ${UI_FONT}`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(key, x + radius * 0.72, y - radius * 0.70);
+      }
+    });
+  }
+
   function drawCanvasMenu() {
     drawMenuBackdrop();
-    const compact = !portrait || screenH < 560;
-    const panelW = Math.min(screenW - 16, compact ? 660 : 580);
-    const panelH = Math.min(screenH - 14, compact ? 292 : 520);
+    const compact = !portrait || screenH < 600;
+    const panelW = Math.min(screenW - 18, compact ? 650 : 480);
+    const panelH = Math.min(screenH - 14, compact ? 292 : 390);
     const x = Math.round((screenW - panelW) / 2);
     const y = Math.round((screenH - panelH) / 2);
-    drawPixelPanel(x, y, panelW, panelH, "#050914", "#6f8fa8", true);
+    drawPixelPanel(x, y, panelW, panelH, "#050914", "#56758a", true);
 
     ctx.textBaseline = "middle";
-    const titleSize = clamp(Math.round(panelH * (compact ? 0.13 : 0.105)), 30, 52);
+    const titleSize = clamp(Math.round(panelH * (compact ? 0.12 : 0.105)), 28, 40);
     ctx.font = `900 ${titleSize}px ${UI_FONT}`;
     const titleText = "IRON REIGN";
     const titleWidth = ctx.measureText(titleText).width;
     const titleStart = screenW / 2 - titleWidth / 2;
-    const titleY = y + panelH * 0.10;
+    const titleY = y + (compact ? 31 : 38);
     ctx.textAlign = "left";
     ctx.fillStyle = "#02040a";
-    ctx.fillText(titleText, titleStart + 4, titleY + 4);
+    ctx.fillText(titleText, titleStart + 3, titleY + 3);
     ctx.fillStyle = "#f4f1d0";
     ctx.fillText("IRON ", titleStart, titleY);
     ctx.fillStyle = "#ff4b3e";
     ctx.fillText("REIGN", titleStart + ctx.measureText("IRON ").width, titleY);
     ctx.textAlign = "center";
-    ctx.font = `900 ${compact ? 10 : 12}px ${UI_FONT}`;
-    ctx.fillStyle = "#fff36d";
-    ctx.fillText("★ FULL CANVAS ARCADE • ONE CREDIT ★", screenW / 2, y + panelH * 0.19);
+    ctx.font = `800 ${compact ? 8 : 9}px ${UI_FONT}`;
+    ctx.fillStyle = "#6f8fa8";
+    ctx.fillText("STAGE ASSAULT", screenW / 2, titleY + titleSize * 0.72);
 
     const zone = WORLD_ZONES[menuLevel];
-    const labelW = Math.min(panelW - 34, 500);
+    const labelW = Math.min(panelW - 28, 480);
     const labelX = screenW / 2 - labelW / 2;
-    const contentTop = y + panelH * 0.27;
-    ctx.fillStyle = "#4ce8ff";
-    ctx.font = `900 ${compact ? 12 : 15}px ${UI_FONT}`;
-    ctx.fillText(zone.title, screenW / 2, contentTop);
-    ctx.fillStyle = "#9db3bd";
-    ctx.font = `700 ${compact ? 9 : 11}px ${UI_FONT}`;
-    const descLines = wrapCanvasText(LEVEL_MENU_DESCRIPTIONS[menuLevel], labelW - 12).slice(0, compact ? 1 : 3);
-    descLines.forEach((line, i) => ctx.fillText(line, screenW / 2, contentTop + 15 + i * 11));
+    const rowH = compact ? 40 : 46;
+    const arrowW = compact ? 36 : 40;
+    const zoneY = y + (compact ? 70 : 88);
 
-    const rowH = clamp(Math.round(panelH * 0.105), 28, 42);
-    const arrowW = compact ? 38 : 46;
-    const row1Y = y + panelH * 0.40;
-    uiRects.menu.levelPrev = { x: labelX, y: row1Y, w: arrowW, h: rowH };
-    uiRects.menu.levelNext = { x: labelX + labelW - arrowW, y: row1Y, w: arrowW, h: rowH };
+    uiRects.menu.levelPrev = { x: labelX, y: zoneY, w: arrowW, h: rowH };
+    uiRects.menu.levelNext = { x: labelX + labelW - arrowW, y: zoneY, w: arrowW, h: rowH };
     drawMenuArrow(uiRects.menu.levelPrev, -1, menuFocus === 0);
     drawMenuArrow(uiRects.menu.levelNext, 1, menuFocus === 0);
-    drawPixelPanel(labelX + arrowW + 5, row1Y, labelW - arrowW * 2 - 10, rowH, "#091426", menuFocus === 0 ? "#fff36d" : "#385b72", false);
+    drawPixelPanel(labelX + arrowW + 5, zoneY, labelW - arrowW * 2 - 10, rowH, "#091426", menuFocus === 0 ? "#fff36d" : "#385b72", false);
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#7894a5";
+    ctx.font = `800 ${compact ? 7 : 8}px ${UI_FONT}`;
+    ctx.fillText(`L${menuLevel + 1}`, screenW / 2, zoneY + rowH * 0.28);
+    const zoneSize = fitCanvasText(zone.short, labelW - arrowW * 2 - 32, compact ? 12 : 14, 9);
     ctx.fillStyle = "#f4f1d0";
-    ctx.font = `900 ${compact ? 11 : 13}px ${UI_FONT}`;
-    ctx.fillText(`LEVEL ${menuLevel + 1} • ${zone.short}`, screenW / 2, row1Y + rowH / 2);
+    ctx.font = `900 ${zoneSize}px ${UI_FONT}`;
+    ctx.fillText(zone.short, screenW / 2, zoneY + rowH * 0.66);
 
-    const row2Y = y + panelH * 0.52;
-    uiRects.menu.diffPrev = { x: labelX, y: row2Y, w: arrowW, h: rowH };
-    uiRects.menu.diffNext = { x: labelX + labelW - arrowW, y: row2Y, w: arrowW, h: rowH };
+    const diffY = zoneY + rowH + 8;
+    uiRects.menu.diffPrev = { x: labelX, y: diffY, w: arrowW, h: rowH };
+    uiRects.menu.diffNext = { x: labelX + labelW - arrowW, y: diffY, w: arrowW, h: rowH };
     drawMenuArrow(uiRects.menu.diffPrev, -1, menuFocus === 1);
     drawMenuArrow(uiRects.menu.diffNext, 1, menuFocus === 1);
-    drawPixelPanel(labelX + arrowW + 5, row2Y, labelW - arrowW * 2 - 10, rowH, "#091426", menuFocus === 1 ? "#fff36d" : "#385b72", false);
-    ctx.fillStyle = "#f4f1d0";
-    ctx.fillText(`DIFFICULTY • ${DIFFICULTY_OPTIONS[menuDifficulty].label}`, screenW / 2, row2Y + rowH / 2);
+    drawPixelPanel(labelX + arrowW + 5, diffY, labelW - arrowW * 2 - 10, rowH, "#091426", menuFocus === 1 ? "#fff36d" : "#385b72", false);
+    const difficultyCenterX = screenW / 2;
+    drawUiIcon("warning", difficultyCenterX - 52, diffY + rowH / 2, compact ? 12 : 13, "#ffb34f", 1.6);
+    ctx.fillStyle = "#dce8ee";
+    ctx.font = `900 ${compact ? 11 : 12}px ${UI_FONT}`;
+    ctx.fillText(DIFFICULTY_OPTIONS[menuDifficulty].label, difficultyCenterX + 8, diffY + rowH / 2 + 0.5);
 
-    const buttonY = y + panelH * 0.64;
+    const buttonY = diffY + rowH + 10;
     const buttonGap = 10;
+    const buttonH = compact ? 45 : 52;
     const buttonW = (labelW - buttonGap) / 2;
-    uiRects.menu.solo = { x: labelX, y: buttonY, w: buttonW, h: rowH + 3 };
-    uiRects.menu.coop = { x: labelX + buttonW + buttonGap, y: buttonY, w: buttonW, h: rowH + 3 };
-    drawPixelPanel(uiRects.menu.solo.x, uiRects.menu.solo.y, uiRects.menu.solo.w, uiRects.menu.solo.h, menuFocus === 2 ? "#d94137" : "#922d2e", menuFocus === 2 ? "#fff36d" : "#ff7d5e", true);
-    drawPixelPanel(uiRects.menu.coop.x, uiRects.menu.coop.y, uiRects.menu.coop.w, uiRects.menu.coop.h, menuFocus === 3 ? "#174968" : "#102d47", menuFocus === 3 ? "#fff36d" : "#4ce8ff", true);
-    ctx.fillStyle = "#ffffff";
-    ctx.font = `900 ${compact ? 10 : 12}px ${UI_FONT}`;
-    ctx.fillText(menuLevel === 0 ? "START CAMPAIGN" : `START LEVEL ${menuLevel + 1}`, uiRects.menu.solo.x + buttonW / 2, buttonY + (rowH + 3) / 2);
-    ctx.fillText(isTouch ? "2P • KEYBOARD" : "2 PLAYER CO-OP", uiRects.menu.coop.x + buttonW / 2, buttonY + (rowH + 3) / 2);
-
-    const settingsY = y + panelH * 0.77;
-    const settingsW = (labelW - buttonGap) / 2;
-    const settingsH = compact ? 28 : 32;
-    uiRects.menu.music = { x: labelX, y: settingsY, w: settingsW, h: settingsH };
-    uiRects.menu.fullscreen = { x: labelX + settingsW + buttonGap, y: settingsY, w: settingsW, h: settingsH };
-    drawPixelPanel(uiRects.menu.music.x, uiRects.menu.music.y, uiRects.menu.music.w, uiRects.menu.music.h, menuFocus === 4 ? "#453a12" : "#18160c", menuFocus === 4 ? "#fff36d" : "#8e7831", false);
-    drawPixelPanel(uiRects.menu.fullscreen.x, uiRects.menu.fullscreen.y, uiRects.menu.fullscreen.w, uiRects.menu.fullscreen.h, menuFocus === 5 ? "#17344b" : "#0c1a2b", menuFocus === 5 ? "#fff36d" : "#4ce8ff", false);
-    ctx.font = `900 ${compact ? 9 : 10}px ${UI_FONT}`;
-    ctx.fillStyle = audio.musicMuted ? "#ff6b5c" : "#fff36d";
-    ctx.fillText(audio.musicMuted ? "MUSIC OFF" : "MUSIC ON", uiRects.menu.music.x + settingsW / 2, settingsY + settingsH / 2);
-    ctx.fillStyle = "#4ce8ff";
-    ctx.fillText(fullscreenActive() ? "EXIT FULLSCREEN" : "FULLSCREEN", uiRects.menu.fullscreen.x + settingsW / 2, settingsY + settingsH / 2);
-
-    if (menuResult) {
-      ctx.fillStyle = menuResult.startsWith("CAMPAIGN") ? "#6dff82" : "#ff695b";
-      const resultSize = fitCanvasText(menuResult, panelW - 24, compact ? 10 : 12, 8);
-      ctx.font = `900 ${resultSize}px ${UI_FONT}`;
-      ctx.fillText(menuResult, screenW / 2, y + panelH * 0.89);
-    } else {
-      ctx.fillStyle = "#7f97a3";
-      if (portrait && !compact) {
-        ctx.font = `700 9px ${UI_FONT}`;
-        ctx.fillText("LEFT HALF MOVE/AIM • DOWN CROUCH • C JUMP/SMASH", screenW / 2, y + panelH * 0.875);
-        ctx.fillText("A STRIKE • B FIRE • X FULLSCREEN", screenW / 2, y + panelH * 0.895);
-      } else {
-        const instruction = compact
-          ? "A STRIKE • B FIRE • C JUMP • X FULLSCREEN"
-          : "MOVE/AIM • DOWN CROUCH/AIR-AIM • C DOUBLE-JUMP • DOWN+C SMASH • A STRIKE • B FIRE • X FULLSCREEN";
-        const instructionSize = fitCanvasText(instruction, panelW - 24, compact ? 8 : 9, 7);
-        ctx.font = `700 ${instructionSize}px ${UI_FONT}`;
-        ctx.fillText(instruction, screenW / 2, y + panelH * 0.89);
-      }
+    uiRects.menu.solo = { x: labelX, y: buttonY, w: buttonW, h: buttonH };
+    uiRects.menu.coop = { x: labelX + buttonW + buttonGap, y: buttonY, w: buttonW, h: buttonH };
+    drawMenuIconButton(uiRects.menu.solo, "play", menuFocus === 2, "#9b302d", "#ff735c", "PLAY");
+    drawMenuIconButton(uiRects.menu.coop, "coop", menuFocus === 3, "#153c5a", "#4ce8ff", "2P");
+    if (isTouch) {
+      drawUiIcon("keyboard", uiRects.menu.coop.x + uiRects.menu.coop.w - 18, uiRects.menu.coop.y + uiRects.menu.coop.h / 2, 13, "#6f8fa8", 1.5);
     }
-    ctx.fillStyle = "#536675";
-    ctx.font = `700 9px ${UI_FONT}`;
+
+    const settingsY = buttonY + buttonH + 8;
+    const settingsH = compact ? 32 : 38;
+    const settingsGap = 10;
+    const settingsW = compact ? 52 : 58;
+    const settingsStart = screenW / 2 - settingsW - settingsGap / 2;
+    uiRects.menu.music = { x: settingsStart, y: settingsY, w: settingsW, h: settingsH };
+    uiRects.menu.fullscreen = { x: settingsStart + settingsW + settingsGap, y: settingsY, w: settingsW, h: settingsH };
+    drawMenuIconButton(uiRects.menu.music, "music", menuFocus === 4, "#3a3211", audio.musicMuted ? "#ff6b5c" : "#fff36d");
+    drawMenuIconButton(uiRects.menu.fullscreen, "fullscreen", menuFocus === 5, "#15344b", fullscreenActive() ? "#fff36d" : "#4ce8ff");
+    if (audio.musicMuted) {
+      ctx.strokeStyle = "#ff6b5c";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(uiRects.menu.music.x + 15, uiRects.menu.music.y + 8);
+      ctx.lineTo(uiRects.menu.music.x + uiRects.menu.music.w - 15, uiRects.menu.music.y + uiRects.menu.music.h - 8);
+      ctx.stroke();
+    }
+
+    const footerY = y + panelH - (compact ? 18 : 27);
+    if (menuResult) {
+      ctx.fillStyle = menuResult.startsWith("COMPLETE") ? "#6dff82" : "#ff695b";
+      const resultSize = fitCanvasText(menuResult, panelW - 24, compact ? 9 : 10, 7);
+      ctx.font = `800 ${resultSize}px ${UI_FONT}`;
+      ctx.textAlign = "center";
+      ctx.fillText(menuResult, screenW / 2, footerY);
+    } else {
+      drawControlLegend(screenW / 2, footerY, compact);
+    }
+
+    ctx.fillStyle = "#405767";
+    ctx.font = `700 7px ${UI_FONT}`;
     ctx.textAlign = "right";
-    ctx.fillText("v4.9 • PRECISE MULTI-TOUCH", x + panelW - 9, y + panelH - 8);
+    ctx.fillText("v5.1", x + panelW - 8, y + panelH - 7);
   }
 
   function drawHealthCard(player, x, y, right = false) {
-    const w = Math.min(155, screenW * 0.31);
-    const h = 40;
-    drawPixelPanel(x, y, w, h, "#07101d", player.color, true);
+    const w = Math.min(140, Math.max(108, screenW * 0.31));
+    const h = 36;
+    drawPixelPanel(x, y, w, h, "rgba(5,13,23,.94)", player.color, true);
     const ratio = clamp(player.health / player.maxHealth, 0, 1);
     const healthColor = ratio > 0.55 ? "#57df6c" : ratio > 0.25 ? "#ffd34d" : "#ff4b3e";
-    ctx.textAlign = right ? "right" : "left";
-    ctx.textBaseline = "top";
-    ctx.font = `900 12px ${UI_FONT}`;
-    ctx.fillStyle = "#f4f1d0";
-    ctx.fillText(`P${player.index + 1} • ${weaponName(player.weapon)}`, right ? x + w - 7 : x + 7, y + 5);
-    ctx.fillStyle = "#101621"; ctx.fillRect(x + 7, y + 18, w - 14, 7);
-    ctx.fillStyle = healthColor; ctx.fillRect(x + 7, y + 18, (w - 14) * ratio, 7);
-    ctx.fillStyle = "#9db3bd";
-    ctx.font = `700 9px ${UI_FONT}`;
-    ctx.fillText(`L${player.lives}  A×${player.specials}  ${String(player.score).padStart(6, "0")}`, right ? x + w - 7 : x + 7, y + 29);
+
+    ctx.textBaseline = "middle";
+    ctx.textAlign = "left";
+    ctx.font = `900 8px ${UI_FONT}`;
+    ctx.fillStyle = player.color;
+    ctx.fillText(`P${player.index + 1}`, x + 6, y + 7);
+    drawUiIcon(`weapon${player.weapon}`, x + w - 11, y + 7, 11, "#dce8ee", 1.5);
+
+    ctx.fillStyle = "#101621";
+    ctx.fillRect(x + 6, y + 13, w - 12, 6);
+    ctx.fillStyle = healthColor;
+    ctx.fillRect(x + 7, y + 14, (w - 14) * ratio, 4);
+
+    const scoreText = player.score >= 1000000
+      ? `${Math.round(player.score / 100000) / 10}M`
+      : player.score >= 1000
+        ? `${Math.round(player.score / 1000)}K`
+        : String(player.score);
+    const metricY = y + 27.5;
+    const metricColor = "#9db3bd";
+    const positions = [x + w * 0.14, x + w * 0.44, x + w * 0.74];
+    const metrics = [
+      ["life", String(player.lives), positions[0]],
+      ["special", String(player.specials), positions[1]],
+      ["score", scoreText, positions[2]]
+    ];
+    ctx.font = `800 ${w < 120 ? 7 : 8}px ${UI_FONT}`;
+    ctx.textAlign = "left";
+    for (const [icon, value, px] of metrics) {
+      drawUiIcon(icon, px, metricY, 7.5, metricColor, 1.3);
+      ctx.fillStyle = metricColor;
+      ctx.fillText(value, px + 7, metricY + 0.5);
+    }
     return w;
   }
 
@@ -6082,61 +6663,79 @@
     const topPad = pad + safeTop;
     if (players[0]) drawHealthCard(players[0], pad + safeLeft, topPad, false);
     if (players[1]) {
-      const w = Math.min(155, screenW * 0.31);
+      const w = Math.min(140, Math.max(108, screenW * 0.31));
       drawHealthCard(players[1], screenW - w - pad - safeRight, topPad, true);
     }
-    const progressW = Math.min(220, screenW * (players[1] ? 0.25 : 0.34));
+
+    const progressW = Math.min(184, screenW * (players[1] ? 0.23 : 0.30));
     const progressX = screenW / 2 - progressW / 2;
     const progressY = 8 + safeTop;
-    ctx.fillStyle = "#07101d"; ctx.fillRect(progressX, progressY, progressW, 9);
-    ctx.strokeStyle = "#6f8fa8"; ctx.lineWidth = 2; ctx.strokeRect(progressX + 1, progressY + 1, progressW - 2, 7);
-    ctx.fillStyle = "#4ce8ff"; ctx.fillRect(progressX + 3, progressY + 3, (progressW - 6) * hudState.progress, 3);
-    ctx.textAlign = "center"; ctx.textBaseline = "top";
-    const phaseSize = fitCanvasText(hudState.phase, progressW + 72, 10, 8);
-    ctx.font = `900 ${phaseSize}px ${UI_FONT}`; ctx.fillStyle = "#c9e9ef";
-    ctx.fillText(hudState.phase, screenW / 2, progressY + 12);
+    ctx.fillStyle = "rgba(5,13,23,.92)";
+    ctx.fillRect(progressX, progressY, progressW, 8);
+    ctx.strokeStyle = "#56758a";
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(progressX + 0.75, progressY + 0.75, progressW - 1.5, 6.5);
+    ctx.fillStyle = "#4ce8ff";
+    ctx.fillRect(progressX + 2.5, progressY + 2.5, (progressW - 5) * hudState.progress, 3);
 
-    const iconSize = isTouch ? 32 : 28;
-    uiRects.pause = { x: screenW / 2 - iconSize / 2, y: 31 + safeTop, w: iconSize, h: 26 };
-    drawPixelPanel(uiRects.pause.x, uiRects.pause.y, uiRects.pause.w, uiRects.pause.h, "#07101d", "#6f8fa8", false);
-    ctx.fillStyle = "#f4f1d0"; ctx.font = `900 13px ${UI_FONT}`; ctx.textBaseline = "middle";
-    ctx.fillText(paused ? "▶" : "Ⅱ", screenW / 2, uiRects.pause.y + uiRects.pause.h / 2 + 1);
+    const iconSize = isTouch ? 30 : 27;
+    uiRects.pause = { x: screenW / 2 - iconSize / 2, y: 24 + safeTop, w: iconSize, h: 25 };
+    drawPixelPanel(uiRects.pause.x, uiRects.pause.y, uiRects.pause.w, uiRects.pause.h, "rgba(5,13,23,.92)", "#56758a", false);
+    drawUiIcon(paused ? "play" : "pause", screenW / 2, uiRects.pause.y + uiRects.pause.h / 2, 12, "#dce8ee", 2);
 
-    const utilityY = (players[1] ? 52 : 7) + safeTop;
-    uiRects.fullscreen = { x: screenW - safeRight - iconSize * 2 - 12, y: utilityY, w: iconSize, h: 26 };
-    uiRects.mute = { x: screenW - safeRight - iconSize - 7, y: utilityY, w: iconSize, h: 26 };
-    drawPixelPanel(uiRects.fullscreen.x, uiRects.fullscreen.y, uiRects.fullscreen.w, uiRects.fullscreen.h, "#07101d", fullscreenActive() ? "#fff36d" : "#4ce8ff", false);
-    drawPixelPanel(uiRects.mute.x, uiRects.mute.y, uiRects.mute.w, uiRects.mute.h, "#07101d", audio.musicMuted ? "#ff6b5c" : "#6f8fa8", false);
-    ctx.font = `900 12px ${UI_FONT}`;
-    ctx.fillStyle = fullscreenActive() ? "#fff36d" : "#4ce8ff";
-    ctx.fillText("FS", uiRects.fullscreen.x + uiRects.fullscreen.w / 2, uiRects.fullscreen.y + uiRects.fullscreen.h / 2 + 1);
-    ctx.fillStyle = audio.musicMuted ? "#ff6b5c" : "#fff36d";
-    ctx.font = `900 12px ${UI_FONT}`;
-    ctx.fillText(audio.musicMuted ? "×" : "♫", uiRects.mute.x + uiRects.mute.w / 2, uiRects.mute.y + uiRects.mute.h / 2 + 1);
+    const utilityY = (players[1] ? 47 : 7) + safeTop;
+    uiRects.fullscreen = { x: screenW - safeRight - iconSize * 2 - 11, y: utilityY, w: iconSize, h: 25 };
+    uiRects.mute = { x: screenW - safeRight - iconSize - 6, y: utilityY, w: iconSize, h: 25 };
+    drawPixelPanel(uiRects.fullscreen.x, uiRects.fullscreen.y, uiRects.fullscreen.w, uiRects.fullscreen.h, "rgba(5,13,23,.92)", fullscreenActive() ? "#fff36d" : "#4ce8ff", false);
+    drawPixelPanel(uiRects.mute.x, uiRects.mute.y, uiRects.mute.w, uiRects.mute.h, "rgba(5,13,23,.92)", audio.musicMuted ? "#ff6b5c" : "#56758a", false);
+    drawUiIcon("fullscreen", uiRects.fullscreen.x + iconSize / 2, utilityY + 12.5, 12, fullscreenActive() ? "#fff36d" : "#4ce8ff", 1.8);
+    drawUiIcon("music", uiRects.mute.x + iconSize / 2, utilityY + 12.5, 12, audio.musicMuted ? "#ff6b5c" : "#fff36d", 1.8);
+    if (audio.musicMuted) {
+      ctx.strokeStyle = "#ff6b5c";
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.moveTo(uiRects.mute.x + 7, utilityY + 5);
+      ctx.lineTo(uiRects.mute.x + iconSize - 7, utilityY + 20);
+      ctx.stroke();
+    }
 
-    if (activeBoss && !activeBoss.dead) {
-      const w = Math.min(screenW * 0.70, 430);
+    if (activeBoss && !activeBoss.dead && !activeBoss.hudHidden) {
+      const w = Math.min(screenW * 0.62, 360);
       const x = screenW / 2 - w / 2;
-      const y = (players[1] ? 80 : 61) + safeTop;
+      const y = (players[1] ? 74 : 56) + safeTop;
       const ratio = clamp(activeBoss.health / activeBoss.maxHealth, 0, 1);
-      ctx.textAlign = "center"; ctx.textBaseline = "bottom"; ctx.font = `900 12px ${UI_FONT}`; ctx.fillStyle = "#fff36d";
-      ctx.fillText(activeBoss.name, screenW / 2, y - 2);
-      ctx.fillStyle = "#18080c"; ctx.fillRect(x, y, w, 9);
-      ctx.strokeStyle = "#f4f1d0"; ctx.lineWidth = 2; ctx.strokeRect(x + 1, y + 1, w - 2, 7);
-      ctx.fillStyle = activeBoss.profile.accent; ctx.fillRect(x + 3, y + 3, (w - 6) * ratio, 3);
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      ctx.font = `800 9px ${UI_FONT}`;
+      ctx.fillStyle = "#dce8ee";
+      ctx.fillText(activeBoss.name, screenW / 2, y - 3);
+      ctx.fillStyle = "rgba(24,8,12,.92)";
+      ctx.fillRect(x, y, w, 7);
+      ctx.strokeStyle = "#b8c6ce";
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(x + 0.75, y + 0.75, w - 1.5, 5.5);
+      ctx.fillStyle = activeBoss.profile.accent;
+      ctx.fillRect(x + 2.5, y + 2.5, (w - 5) * ratio, 2);
     }
 
     if (bannerText && performance.now() < bannerUntil) {
       const remaining = Math.max(0, bannerUntil - performance.now());
       const alpha = Math.min(1, remaining / 180);
       ctx.globalAlpha = alpha;
-      const size = fitCanvasText(bannerText, screenW * 0.88, Math.max(18, screenW * 0.055), 12);
+      const size = fitCanvasText(bannerText, screenW * 0.76, 22, 12);
       ctx.font = `900 ${size}px ${UI_FONT}`;
-      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
       const tw = ctx.measureText(bannerText).width;
-      ctx.fillStyle = "rgba(0,0,0,.58)"; ctx.fillRect(screenW / 2 - tw / 2 - 9, screenH * 0.22 - size * 0.65, tw + 18, size * 1.3);
-      ctx.fillStyle = "#02040a"; ctx.fillText(bannerText, screenW / 2 + 3, screenH * 0.22 + 3);
-      ctx.fillStyle = "#fff36d"; ctx.fillText(bannerText, screenW / 2, screenH * 0.22);
+      const boxH = size + 12;
+      ctx.fillStyle = "rgba(2,7,14,.76)";
+      roundRect(screenW / 2 - tw / 2 - 12, screenH * 0.19 - boxH / 2, tw + 24, boxH, 8);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255,243,109,.55)";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.fillStyle = "#fff36d";
+      ctx.fillText(bannerText, screenW / 2, screenH * 0.19);
       ctx.globalAlpha = 1;
     }
   }
@@ -6152,69 +6751,70 @@
       const baseX = touchStick.baseX;
       const baseY = touchStick.baseY;
       const stickRadius = touchStick.radius;
-      ctx.globalAlpha = 0.90;
-      ctx.fillStyle = "rgba(4,12,24,.48)";
+      ctx.globalAlpha = 0.76;
+      ctx.fillStyle = "rgba(4,12,24,.40)";
       ctx.beginPath(); ctx.arc(baseX, baseY, stickRadius, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = "rgba(177,215,232,.86)";
-      ctx.lineWidth = 2; ctx.stroke();
-      ctx.strokeStyle = "rgba(76,232,255,.38)";
-      ctx.lineWidth = 1.1;
+      ctx.strokeStyle = "rgba(177,215,232,.62)";
+      ctx.lineWidth = 1.6; ctx.stroke();
+      ctx.strokeStyle = "rgba(76,232,255,.28)";
+      ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.moveTo(baseX - stickRadius * .68, baseY); ctx.lineTo(baseX + stickRadius * .68, baseY);
-      ctx.moveTo(baseX, baseY - stickRadius * .68); ctx.lineTo(baseX, baseY + stickRadius * .68);
+      ctx.moveTo(baseX - stickRadius * .62, baseY); ctx.lineTo(baseX + stickRadius * .62, baseY);
+      ctx.moveTo(baseX, baseY - stickRadius * .62); ctx.lineTo(baseX, baseY + stickRadius * .62);
       ctx.stroke();
 
       const kx = baseX + touchStick.knobX;
       const ky = baseY + touchStick.knobY;
-      ctx.fillStyle = "rgba(52,79,108,.94)";
-      ctx.beginPath(); ctx.arc(kx, ky, stickRadius * 0.40, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = "#4ce8ff"; ctx.lineWidth = 2; ctx.stroke();
-
-      const angle = Math.atan2(touchStick.aimY, touchStick.aimX);
-      ctx.strokeStyle = "#4ce8ff"; ctx.lineWidth = 2.2;
-      ctx.beginPath();
-      ctx.moveTo(baseX, baseY);
-      ctx.lineTo(baseX + Math.cos(angle) * stickRadius * 0.78, baseY + Math.sin(angle) * stickRadius * 0.78);
-      ctx.stroke();
+      ctx.fillStyle = "rgba(40,63,88,.90)";
+      ctx.beginPath(); ctx.arc(kx, ky, stickRadius * 0.34, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = "#4ce8ff"; ctx.lineWidth = 1.8; ctx.stroke();
     }
 
     let defs;
     if (portrait) {
-      const r = clamp(screenW * 0.086, 32, 42);
-      const fireX = screenW - safeRight - r - 14;
-      const fireY = screenH - safeBottom - r - 22;
+      const layoutR = clamp(screenW * 0.086, 32, 42);
+      const fireX = screenW - safeRight - layoutR - 14;
+      const fireY = screenH - safeBottom - layoutR - 22;
       defs = [
-        ["KeyG", "A", "STRIKE", fireX - r * 3.65, fireY + r * 0.12, r * 0.88, "#d39a28"],
-        ["KeyF", "B", "FIRE", fireX - r * 1.80, fireY, r, "#b92f35"],
-        ["KeyW", "C", "JUMP", fireX, fireY - r * 0.30, r, "#285b91"]
+        ["KeyG", "A", "strike", fireX - layoutR * 3.65, fireY + layoutR * 0.12, layoutR * 0.72, layoutR * 0.88, "#d39a28"],
+        ["KeyF", "B", "fire", fireX - layoutR * 1.80, fireY, layoutR * 0.82, layoutR, "#b92f35"],
+        ["KeyW", "C", "jump", fireX, fireY - layoutR * 0.30, layoutR * 0.82, layoutR, "#285b91"]
       ];
     } else {
-      const r = clamp(screenH * 0.073, 26, 31);
-      const edgeX = screenW - safeRight - r - 13;
-      const edgeY = screenH - safeBottom - r - 13;
+      const layoutR = clamp(screenH * 0.073, 26, 31);
+      const edgeX = screenW - safeRight - layoutR - 13;
+      const edgeY = screenH - safeBottom - layoutR - 13;
       defs = [
-        ["KeyG", "A", "STRIKE", edgeX - r * 4.35, edgeY + r * 0.06, r * 0.82, "#d39a28"],
-        ["KeyF", "B", "FIRE", edgeX - r * 2.18, edgeY, r, "#b92f35"],
-        ["KeyW", "C", "JUMP", edgeX, edgeY - r * 1.05, r * 0.96, "#285b91"]
+        ["KeyG", "A", "strike", edgeX - layoutR * 4.35, edgeY + layoutR * 0.06, layoutR * 0.69, layoutR * 0.82, "#d39a28"],
+        ["KeyF", "B", "fire", edgeX - layoutR * 2.18, edgeY, layoutR * 0.82, layoutR, "#b92f35"],
+        ["KeyW", "C", "jump", edgeX, edgeY - layoutR * 1.05, layoutR * 0.79, layoutR * 0.96, "#285b91"]
       ];
     }
 
-    for (const [code, letter, label, x, y, r, color] of defs) {
-      uiRects.buttons[code] = { x, y, r };
+    for (const [code, letter, icon, x, y, r, hitR, color] of defs) {
+      uiRects.buttons[code] = { x, y, r: hitR };
       const held = Boolean(touchKeys[code]);
-      ctx.globalAlpha = held ? 0.98 : (portrait ? 0.78 : 0.68);
-      ctx.fillStyle = "rgba(0,0,0,.42)";
+      ctx.globalAlpha = held ? 0.96 : (portrait ? 0.70 : 0.62);
+      ctx.fillStyle = "rgba(0,0,0,.36)";
       ctx.beginPath(); ctx.arc(x + 2, y + 3, r, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = held ? "#f6f3dc" : color;
+      ctx.fillStyle = held ? "#eef3f5" : color;
       ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = held ? "#fff36d" : "rgba(255,255,255,.88)";
-      ctx.lineWidth = 2.2; ctx.stroke();
-      ctx.fillStyle = held ? color : "#ffffff";
-      ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.font = `900 ${r * 0.60}px ${UI_FONT}`;
-      ctx.fillText(letter, x, y - r * 0.10);
-      ctx.font = `800 ${Math.max(8, r * 0.24)}px ${UI_FONT}`;
-      ctx.fillText(label, x, y + r * 0.43);
+      ctx.strokeStyle = held ? "#fff36d" : "rgba(255,255,255,.72)";
+      ctx.lineWidth = 1.9; ctx.stroke();
+      drawUiIcon(icon, x, y, r * 0.80, held ? color : "#ffffff", 2.2);
+
+      const badgeR = Math.max(7, r * 0.23);
+      const badgeX = x + r * 0.68;
+      const badgeY = y - r * 0.68;
+      ctx.fillStyle = "rgba(4,10,18,.94)";
+      ctx.beginPath(); ctx.arc(badgeX, badgeY, badgeR, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = held ? "#fff36d" : "rgba(255,255,255,.58)";
+      ctx.lineWidth = 1.2; ctx.stroke();
+      ctx.fillStyle = held ? "#fff36d" : "#dce8ee";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = `900 ${Math.max(7, badgeR * 1.05)}px ${UI_FONT}`;
+      ctx.fillText(letter, badgeX, badgeY + 0.4);
     }
     ctx.restore();
   }
@@ -6222,78 +6822,77 @@
   function drawStageIntroOverlay() {
     if (!stageIntro) return;
     const elapsed = stageIntro.duration - stageIntro.timer;
-    const reveal = clamp(elapsed / 0.35, 0, 1);
-    const leave = clamp(stageIntro.timer / 0.25, 0, 1);
+    const reveal = clamp(elapsed / 0.28, 0, 1);
+    const leave = clamp(stageIntro.timer / 0.22, 0, 1);
     const alpha = Math.min(reveal, leave);
     const zone = WORLD_ZONES[stageIntro.level];
     const ready = stageIntro.timer > 0.58;
 
     ctx.save();
     ctx.globalAlpha = alpha;
-    ctx.fillStyle = "rgba(1,4,10,.82)";
+    ctx.fillStyle = "rgba(1,4,10,.58)";
     ctx.fillRect(0, 0, screenW, screenH);
-    const panelW = Math.min(screenW * 0.88, 560);
-    const panelH = Math.min(screenH * 0.52, 210);
+    const panelW = Math.min(screenW * 0.78, 430);
+    const panelH = Math.min(112, screenH * 0.28);
     const x = screenW / 2 - panelW / 2;
     const y = screenH / 2 - panelH / 2;
-    drawPixelPanel(x, y, panelW, panelH, "#07101d", "#4ce8ff", true);
+    drawPixelPanel(x, y, panelW, panelH, "rgba(5,13,23,.96)", "#4ce8ff", true);
+
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillStyle = "#4ce8ff";
-    ctx.font = `900 ${clamp(Math.round(panelH * 0.14), 16, 28)}px ${UI_FONT}`;
-    ctx.fillText(`LEVEL ${stageIntro.level + 1}`, screenW / 2, y + panelH * 0.24);
+    ctx.fillStyle = "#6f8fa8";
+    ctx.font = `800 8px ${UI_FONT}`;
+    ctx.fillText(`LEVEL ${stageIntro.level + 1}`, screenW / 2, y + 19);
     ctx.fillStyle = "#f4f1d0";
-    ctx.font = `900 ${fitCanvasText(zone.short, panelW * 0.86, clamp(Math.round(panelH * 0.20), 22, 42), 14)}px ${UI_FONT}`;
-    ctx.fillText(zone.short, screenW / 2, y + panelH * 0.47);
-    ctx.fillStyle = "#9db3bd";
-    ctx.font = `900 ${clamp(Math.round(panelH * 0.075), 9, 14)}px ${UI_FONT}`;
-    ctx.fillText(stageMechanicText(stageIntro.level), screenW / 2, y + panelH * 0.64);
+    const zoneSize = fitCanvasText(zone.short, panelW * 0.82, 26, 15);
+    ctx.font = `900 ${zoneSize}px ${UI_FONT}`;
+    ctx.fillText(zone.short, screenW / 2, y + panelH * 0.50);
+
+    const cueY = y + panelH - 18;
+    drawUiIcon(ready ? "pause" : "next", screenW / 2 - 24, cueY, 10, ready ? "#fff36d" : "#6dff82", 1.8);
+    ctx.textAlign = "left";
     ctx.fillStyle = ready ? "#fff36d" : "#6dff82";
-    ctx.font = `900 ${clamp(Math.round(panelH * 0.18), 22, 38)}px ${UI_FONT}`;
-    ctx.fillText(ready ? "READY" : "GO!", screenW / 2, y + panelH * 0.82);
+    ctx.font = `900 9px ${UI_FONT}`;
+    ctx.fillText(ready ? "READY" : "GO", screenW / 2 - 12, cueY + 0.5);
     ctx.restore();
   }
 
   function drawLevelTransitionOverlay() {
     if (!levelTransition) return;
-    const elapsed = levelTransition.duration - levelTransition.timer;
     const nextZone = WORLD_ZONES[levelTransition.nextLevel];
-    const pulse = 0.78 + Math.sin(elapsed * 6) * 0.22;
 
     ctx.save();
     ctx.fillStyle = "#010207";
     ctx.fillRect(0, 0, screenW, screenH);
 
-    const panelW = Math.min(screenW * 0.86, 620);
-    const panelH = Math.min(screenH * 0.56, 250);
+    const panelW = Math.min(screenW * 0.80, 440);
+    const panelH = Math.min(128, screenH * 0.34);
     const x = screenW / 2 - panelW / 2;
     const y = screenH / 2 - panelH / 2;
-    drawPixelPanel(x, y, panelW, panelH, "#07101d", "#fff36d", true);
+    drawPixelPanel(x, y, panelW, panelH, "#07101d", "#6dff82", true);
 
-    ctx.textAlign = "center";
+    const iconX = x + 38;
+    const centerY = y + panelH * 0.43;
+    drawUiIcon("check", iconX, centerY, 24, "#6dff82", 3.2);
+
+    ctx.textAlign = "left";
     ctx.textBaseline = "middle";
-    ctx.fillStyle = "#6dff82";
-    ctx.font = `900 ${clamp(Math.round(panelH * 0.15), 20, 34)}px ${UI_FONT}`;
-    ctx.fillText(`LEVEL ${levelTransition.nextLevel} COMPLETE`, screenW / 2, y + panelH * 0.23);
-
     ctx.fillStyle = "#f4f1d0";
-    ctx.font = `900 ${clamp(Math.round(panelH * 0.11), 15, 25)}px ${UI_FONT}`;
-    ctx.fillText("AREA CLEARED • LOADOUT SAVED", screenW / 2, y + panelH * 0.43);
-
-    ctx.globalAlpha = pulse;
+    ctx.font = `900 ${clamp(Math.round(panelH * 0.16), 15, 20)}px ${UI_FONT}`;
+    ctx.fillText(`LEVEL ${levelTransition.nextLevel} CLEAR`, x + 68, centerY - 10);
     ctx.fillStyle = "#63e5ff";
-    ctx.font = `900 ${clamp(Math.round(panelH * 0.10), 14, 23)}px ${UI_FONT}`;
-    ctx.fillText(`NEXT • ${nextZone.short}`, screenW / 2, y + panelH * 0.66);
-    ctx.globalAlpha = 1;
+    ctx.font = `800 ${clamp(Math.round(panelH * 0.09), 9, 12)}px ${UI_FONT}`;
+    ctx.fillText(nextZone.short, x + 68, centerY + 13);
+    drawUiIcon("next", x + panelW - 28, centerY + 12, 12, "#63e5ff", 1.8);
 
     const progress = clamp(1 - levelTransition.timer / levelTransition.duration, 0, 1);
-    const barW = panelW * 0.68;
-    const barX = screenW / 2 - barW / 2;
-    const barY = y + panelH * 0.82;
+    const barW = panelW - 38;
+    const barX = x + 19;
+    const barY = y + panelH - 20;
     ctx.fillStyle = "#121925";
-    ctx.fillRect(barX, barY, barW, 10);
+    ctx.fillRect(barX, barY, barW, 5);
     ctx.fillStyle = "#fff36d";
-    ctx.fillRect(barX, barY, barW * progress, 10);
+    ctx.fillRect(barX, barY, barW * progress, 5);
     ctx.restore();
   }
 
@@ -6377,20 +6976,22 @@
     }
 
     if (paused) {
-      ctx.fillStyle = "rgba(0,0,0,.72)";
+      ctx.fillStyle = "rgba(0,0,0,.66)";
       ctx.fillRect(0, 0, screenW, screenH);
-      const w = Math.min(300, screenW * 0.72);
-      const h = 104;
-      drawPixelPanel(screenW / 2 - w / 2, screenH / 2 - h / 2, w, h, "#07101d", "#fff36d", true);
-      ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.font = `900 ${Math.max(24, Math.round(screenW * 0.06))}px ${UI_FONT}`;
-      ctx.fillStyle = "#fff36d"; ctx.fillText("PAUSED", screenW / 2, screenH / 2 - 13);
-      ctx.font = `900 12px ${UI_FONT}`; ctx.fillStyle = "#9db3bd";
-      ctx.fillText("TAP ▶ OR PRESS P TO RESUME", screenW / 2, screenH / 2 + 22);
-      uiRects.pause = { x: screenW / 2 - 34, y: screenH / 2 + 34, w: 68, h: 30 };
-      drawPixelPanel(uiRects.pause.x, uiRects.pause.y, uiRects.pause.w, uiRects.pause.h, "#17344b", "#fff36d", false);
-      ctx.fillStyle = "#fff36d"; ctx.font = `900 13px ${UI_FONT}`;
-      ctx.fillText("▶", screenW / 2, uiRects.pause.y + uiRects.pause.h / 2 + 1);
+      const w = Math.min(220, screenW * 0.62);
+      const h = 86;
+      const px = screenW / 2 - w / 2;
+      const py = screenH / 2 - h / 2;
+      drawPixelPanel(px, py, w, h, "#07101d", "#fff36d", true);
+      drawUiIcon("pause", screenW / 2 - 43, py + 27, 18, "#fff36d", 2.4);
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.font = `900 17px ${UI_FONT}`;
+      ctx.fillStyle = "#f4f1d0";
+      ctx.fillText("PAUSED", screenW / 2 - 20, py + 27);
+      uiRects.pause = { x: screenW / 2 - 31, y: py + 49, w: 62, h: 27 };
+      drawPixelPanel(uiRects.pause.x, uiRects.pause.y, uiRects.pause.w, uiRects.pause.h, "#15344b", "#fff36d", false);
+      drawUiIcon("play", screenW / 2, uiRects.pause.y + uiRects.pause.h / 2, 13, "#fff36d", 2);
     }
   }
 
