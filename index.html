@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>Iron Reign: Stage Assault v4.6</title>
+<title>Iron Reign: Stage Assault v4.9</title>
 <style>
   :root {
     --safe-top: env(safe-area-inset-top, 0px);
@@ -70,7 +70,7 @@
   }
   canvas.addEventListener("touchstart", preventNativePageGesture, { passive: false });
   canvas.addEventListener("touchmove", preventNativePageGesture, { passive: false });
-  const UI_FONT = '"Trebuchet MS", Arial, sans-serif';
+  const UI_FONT = '-apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif';
   const DEFAULT_SUBTITLE = "Six handcrafted arcade worlds with terrain-aware combat, aerial smash attacks, animated pixel-art bosses, persistent weapons, and cinematic victories.";
   const DIFFICULTY_OPTIONS = [
     { label: "RECRUIT", value: 0.85 },
@@ -97,6 +97,8 @@
   const uiRects = { menu: {}, pause: null, mute: null, fullscreen: null, stick: null, buttons: {} };
   const MENU_FOCUS_COUNT = 6;
   const pointerActions = new Map();
+  const fittedTextCache = new Map();
+  const wrappedTextCache = new Map();
 
   const LEVEL_W = 54400;
   const WORLD_H = 900;
@@ -239,6 +241,8 @@
   };
 
   let dpr = 1;
+  let screenW = 1;
+  let screenH = 1;
   let viewScale = 1;
   let baseVisibleWorldW = 1700;
   let visibleWorldW = 1700;
@@ -303,6 +307,33 @@
   let campaignLevel = 0;
   let triggered = new Set();
   let hitStop = 0;
+  const enemySpacingScratch = [];
+
+  function pruneDead(list) {
+    let write = 0;
+    for (let read = 0; read < list.length; read++) {
+      const entity = list[read];
+      if (!entity.dead) list[write++] = entity;
+    }
+    list.length = write;
+  }
+
+  function frontAlivePlayer() {
+    let front = null;
+    for (const player of players) {
+      if (!player.dead && (!front || player.cx > front.cx)) front = player;
+    }
+    return front;
+  }
+
+  function leadingPlayerX(useCenter = true) {
+    let lead = 0;
+    for (const player of players) {
+      if (player.dead) continue;
+      lead = Math.max(lead, useCenter ? player.cx : player.x);
+    }
+    return lead;
+  }
 
   function setupTerrain() {
     const raw = [
@@ -460,10 +491,16 @@
     portrait = nextPortrait;
     previousResizePortrait = portrait;
 
-    // Render at the device's real pixel density. UI dimensions are calculated in
-    // physical CSS pixels, so increasing resolution improves clarity without
-    // making controls larger or changing gameplay scale.
-    dpr = isTouch ? 1 : clamp(window.devicePixelRatio || 1, 1, 1.35);
+    // Use only integer backing scales. Fractional canvas scales can produce
+    // seams, clipped strokes, and intermittent compositing artifacts in iOS
+    // Safari. Phones render at a stable 2x Retina buffer; unusually large
+    // displays fall back to 1x before exceeding the safe backing-pixel budget.
+    screenW = vw;
+    screenH = vh;
+    const nativeDpr = Math.max(1, window.devicePixelRatio || 1);
+    const retinaPixels = vw * vh * 4;
+    dpr = nativeDpr >= 2 && retinaPixels <= 4000000 ? 2 : 1;
+
     canvas.style.left = offsetX + "px";
     canvas.style.top = offsetY + "px";
     canvas.style.width = vw + "px";
@@ -472,10 +509,12 @@
     canvas.height = Math.max(1, Math.round(vh * dpr));
 
     const rootStyle = getComputedStyle(document.documentElement);
-    safeTop = (parseFloat(rootStyle.getPropertyValue("--safe-top")) || 0) * dpr;
-    safeRight = (parseFloat(rootStyle.getPropertyValue("--safe-right")) || 0) * dpr;
-    safeBottom = (parseFloat(rootStyle.getPropertyValue("--safe-bottom")) || 0) * dpr;
-    safeLeft = (parseFloat(rootStyle.getPropertyValue("--safe-left")) || 0) * dpr;
+    safeTop = parseFloat(rootStyle.getPropertyValue("--safe-top")) || 0;
+    safeRight = parseFloat(rootStyle.getPropertyValue("--safe-right")) || 0;
+    safeBottom = parseFloat(rootStyle.getPropertyValue("--safe-bottom")) || 0;
+    safeLeft = parseFloat(rootStyle.getPropertyValue("--safe-left")) || 0;
+    fittedTextCache.clear();
+    wrappedTextCache.clear();
     ctx.imageSmoothingEnabled = true;
     ctx.lineJoin = "round";
     ctx.lineCap = "round";
@@ -492,11 +531,8 @@
     cameraTargetX = clamp(cameraTargetX, 0, maxCameraX);
 
     let focusY = terrainSurfaceY(cameraX + visibleWorldW * 0.36);
-    const alivePlayers = players.filter(player => !player.dead);
-    if (running && alivePlayers.length) {
-      const leadPlayer = alivePlayers.reduce((best, player) => player.cx > best.cx ? player : best, alivePlayers[0]);
-      focusY = terrainSurfaceY(leadPlayer.cx);
-    }
+    const leadPlayer = running ? frontAlivePlayer() : null;
+    if (leadPlayer) focusY = terrainSurfaceY(leadPlayer.cx);
 
     const baselineY = clampCameraY(
       focusY - visibleWorldH * cameraGroundAnchor()
@@ -1709,16 +1745,12 @@
     }
 
     acquireTarget() {
-      const candidates = enemies.filter(enemy => !enemy.dead);
-      if (activeBoss && !activeBoss.dead) candidates.push(activeBoss);
-
       let best = null;
       let bestScore = Infinity;
       const currentAngle = Math.atan2(this.vy, this.vx);
 
-      for (const candidate of candidates) {
-        if (!this.targetIsOnScreen(candidate)) continue;
-
+      const consider = candidate => {
+        if (!this.targetIsOnScreen(candidate)) return;
         const dx = candidate.cx - this.cx;
         const dy = candidate.cy - this.cy;
         const distance = Math.hypot(dx, dy);
@@ -1728,13 +1760,16 @@
           Math.cos(desiredAngle - currentAngle)
         ));
         const score = distance + angleDifference * 115;
-
         if (score < bestScore) {
           bestScore = score;
           best = candidate;
         }
-      }
+      };
 
+      for (const enemy of enemies) {
+        if (!enemy.dead) consider(enemy);
+      }
+      if (activeBoss && !activeBoss.dead) consider(activeBoss);
       this.target = best;
     }
 
@@ -3410,8 +3445,8 @@
     }
 
     drawOverlay() {
-      const width = canvas.width;
-      const height = canvas.height;
+      const width = screenW;
+      const height = screenH;
       const reveal = clamp(this.elapsed / 0.55, 0, 1);
       const exit = clamp(this.life / 0.55, 0, 1);
       const alpha = Math.min(reveal, exit);
@@ -4899,12 +4934,7 @@
   }
 
   function runScripts() {
-    const alivePlayers = players.filter(player => !player.dead);
-    const lead = Math.max(
-      0,
-      ...alivePlayers.map(player => player.cx),
-      introVehicle ? introVehicle.x : 0
-    );
+    const lead = Math.max(leadingPlayerX(true), introVehicle ? introVehicle.x : 0);
 
     for (let i = 0; i < scripts.length; i++) {
       if (lead >= scripts[i][0] && !triggered.has(i)) {
@@ -4915,13 +4945,19 @@
   }
 
   function resolveEnemySpacing() {
-    const local = enemies
-      .filter(enemy => !enemy.dead && enemy.grounded && enemy.x + enemy.w >= cameraX - 180 && enemy.x <= cameraX + visibleWorldW + 180)
-      .sort((a, b) => a.x - b.x);
+    enemySpacingScratch.length = 0;
+    const minX = cameraX - 180;
+    const maxX = cameraX + visibleWorldW + 180;
+    for (const enemy of enemies) {
+      if (!enemy.dead && enemy.grounded && enemy.x + enemy.w >= minX && enemy.x <= maxX) {
+        enemySpacingScratch.push(enemy);
+      }
+    }
+    enemySpacingScratch.sort((a, b) => a.x - b.x);
 
-    for (let i = 1; i < local.length; i++) {
-      const left = local[i - 1];
-      const right = local[i];
+    for (let i = 1; i < enemySpacingScratch.length; i++) {
+      const left = enemySpacingScratch[i - 1];
+      const right = enemySpacingScratch[i];
       if (left.y + left.h <= right.y + 8 || right.y + right.h <= left.y + 8) continue;
 
       const gap = right.x - (left.x + left.w);
@@ -5079,8 +5115,8 @@
       updateStageIntro(dt);
       for (const particle of particles) particle.update(dt);
       for (const text of floatingTexts) text.update(dt);
-      particles = particles.filter(entity => !entity.dead);
-      floatingTexts = floatingTexts.filter(entity => !entity.dead);
+      pruneDead(particles);
+      pruneDead(floatingTexts);
       updateCamera(dt);
       updateHud();
       return;
@@ -5090,8 +5126,8 @@
       updatePortalWarp(dt);
       for (const particle of particles) particle.update(dt);
       for (const text of floatingTexts) text.update(dt);
-      particles = particles.filter(entity => !entity.dead);
-      floatingTexts = floatingTexts.filter(entity => !entity.dead);
+      pruneDead(particles);
+      pruneDead(floatingTexts);
       updateHud();
       return;
     }
@@ -5151,16 +5187,16 @@
     for (const piece of debris) piece.update(dt);
     for (const hazard of hazards) hazard.update(dt);
 
-    enemies = enemies.filter(entity => !entity.dead);
-    bullets = bullets.filter(entity => !entity.dead);
-    enemyBullets = enemyBullets.filter(entity => !entity.dead);
-    pickups = pickups.filter(entity => !entity.dead);
-    particles = particles.filter(entity => !entity.dead);
-    blastEffects = blastEffects.filter(entity => !entity.dead);
-    bossDeaths = bossDeaths.filter(entity => !entity.dead);
-    floatingTexts = floatingTexts.filter(entity => !entity.dead);
-    debris = debris.filter(entity => !entity.dead);
-    hazards = hazards.filter(entity => !entity.dead);
+    pruneDead(enemies);
+    pruneDead(bullets);
+    pruneDead(enemyBullets);
+    pruneDead(pickups);
+    pruneDead(particles);
+    pruneDead(blastEffects);
+    pruneDead(bossDeaths);
+    pruneDead(floatingTexts);
+    pruneDead(debris);
+    pruneDead(hazards);
 
     if (finalWinTimer > 0) {
       finalWinTimer -= dt;
@@ -5190,11 +5226,8 @@
     } else if (levelState === "crash") {
       desiredX = cameraHoldX ?? cameraX;
     } else {
-      const alivePlayers = players.filter(player => !player.dead);
-      if (alivePlayers.length) {
-        const lead = Math.max(...alivePlayers.map(player => player.cx));
-        desiredX = Math.max(cameraTargetX, lead - visibleWorldW * 0.34);
-      }
+      const lead = leadingPlayerX(true);
+      if (lead > 0) desiredX = Math.max(cameraTargetX, lead - visibleWorldW * 0.34);
     }
 
     if (activeBoss && !activeBoss.dead) {
@@ -5223,10 +5256,9 @@
     if (Math.abs(cameraTargetX - cameraX) < 0.02) cameraX = cameraTargetX;
     cameraX = clamp(cameraX, 0, maxCameraX);
 
-    const alivePlayers = players.filter(player => !player.dead);
+    const leadPlayer = frontAlivePlayer();
     let focusY = terrainSurfaceY(cameraX + visibleWorldW * 0.36);
-    if (alivePlayers.length) {
-      const leadPlayer = alivePlayers.reduce((best, player) => player.cx > best.cx ? player : best, alivePlayers[0]);
+    if (leadPlayer) {
       const terrainY = terrainSurfaceY(leadPlayer.cx);
       focusY = leadPlayer.onGround ? Math.min(terrainY, leadPlayer.y + leadPlayer.h) : terrainY;
     }
@@ -5242,7 +5274,7 @@
   }
 
   function updateHud() {
-    const lead = Math.max(cameraX, ...players.map(player => player.x));
+    const lead = Math.max(cameraX, leadingPlayerX(false));
     const zone = WORLD_ZONES[campaignLevel] || WORLD_ZONES[0];
     hudState.progress = clamp((lead - zone.start) / Math.max(1, zone.end - zone.start), 0, 1);
 
@@ -5809,33 +5841,43 @@
   }
 
   function drawPixelPanel(x, y, w, h, fill = "#07101d", edge = "#6f8fa8", shadow = true) {
-    const radius = clamp(Math.min(w, h) * 0.18, 5 * dpr, 13 * dpr);
+    const radius = clamp(Math.min(w, h) * 0.18, 5, 13);
     if (shadow) {
       ctx.fillStyle = "rgba(0,0,0,.52)";
-      roundRect(x + 4 * dpr, y + 5 * dpr, w, h, radius);
+      roundRect(x + 4, y + 5, w, h, radius);
       ctx.fill();
     }
     ctx.fillStyle = fill;
     roundRect(x, y, w, h, radius);
     ctx.fill();
     ctx.strokeStyle = edge;
-    ctx.lineWidth = Math.max(2, 2.2 * dpr);
+    ctx.lineWidth = 2.2;
     roundRect(x + ctx.lineWidth / 2, y + ctx.lineWidth / 2, w - ctx.lineWidth, h - ctx.lineWidth, radius);
     ctx.stroke();
   }
 
   function fitCanvasText(text, maxWidth, startSize, minimum = 8) {
+    const key = `${text}|${Math.round(maxWidth)}|${startSize}|${minimum}`;
+    const cached = fittedTextCache.get(key);
+    if (cached != null) return cached;
+
     let size = startSize;
     while (size > minimum) {
       ctx.font = `900 ${size}px ${UI_FONT}`;
       if (ctx.measureText(text).width <= maxWidth) break;
       size--;
     }
+    fittedTextCache.set(key, size);
     return size;
   }
 
   function wrapCanvasText(text, maxWidth) {
-    const words = String(text).split(/\s+/);
+    const value = String(text);
+    const key = `${ctx.font}|${Math.round(maxWidth)}|${value}`;
+    const cached = wrappedTextCache.get(key);
+    if (cached) return cached;
+
+    const words = value.split(/\s+/);
     const lines = [];
     let line = "";
     for (const word of words) {
@@ -5846,6 +5888,7 @@
       } else line = test;
     }
     if (line) lines.push(line);
+    wrappedTextCache.set(key, lines);
     return lines;
   }
 
@@ -5860,30 +5903,30 @@
     ];
     const [bg, accent, secondary] = palettes[menuLevel];
     ctx.fillStyle = bg;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    const horizon = canvas.height * 0.58;
+    ctx.fillRect(0, 0, screenW, screenH);
+    const horizon = screenH * 0.58;
     ctx.fillStyle = secondary;
     for (let i = 0; i < 18; i++) {
       const w = 12 + (i * 17 % 42);
-      const h = 16 + (i * 31 % Math.max(24, canvas.height * 0.24));
-      const x = (i * 67 + time * (5 + menuLevel)) % (canvas.width + 80) - 40;
+      const h = 16 + (i * 31 % Math.max(24, screenH * 0.24));
+      const x = (i * 67 + time * (5 + menuLevel)) % (screenW + 80) - 40;
       ctx.globalAlpha = 0.18 + (i % 3) * 0.06;
       ctx.fillRect(x, horizon - h, w, h);
     }
     ctx.globalAlpha = 1;
     ctx.strokeStyle = accent;
     ctx.lineWidth = 2;
-    for (let y = horizon; y < canvas.height; y += 12) {
+    for (let y = horizon; y < screenH; y += 12) {
       const spread = (y - horizon) * 0.55;
       ctx.beginPath();
-      ctx.moveTo(canvas.width / 2 - spread, y);
-      ctx.lineTo(canvas.width / 2 + spread, y);
+      ctx.moveTo(screenW / 2 - spread, y);
+      ctx.lineTo(screenW / 2 + spread, y);
       ctx.stroke();
     }
     for (let i = -7; i <= 7; i++) {
       ctx.beginPath();
-      ctx.moveTo(canvas.width / 2, horizon);
-      ctx.lineTo(canvas.width / 2 + i * canvas.width * 0.11, canvas.height);
+      ctx.moveTo(screenW / 2, horizon);
+      ctx.lineTo(screenW / 2 + i * screenW * 0.11, screenH);
       ctx.stroke();
     }
   }
@@ -5905,11 +5948,11 @@
 
   function drawCanvasMenu() {
     drawMenuBackdrop();
-    const compact = !portrait || canvas.height < 560;
-    const panelW = Math.min(canvas.width - 16, compact ? 660 : 580);
-    const panelH = Math.min(canvas.height - 14, compact ? 292 : 520);
-    const x = Math.round((canvas.width - panelW) / 2);
-    const y = Math.round((canvas.height - panelH) / 2);
+    const compact = !portrait || screenH < 560;
+    const panelW = Math.min(screenW - 16, compact ? 660 : 580);
+    const panelH = Math.min(screenH - 14, compact ? 292 : 520);
+    const x = Math.round((screenW - panelW) / 2);
+    const y = Math.round((screenH - panelH) / 2);
     drawPixelPanel(x, y, panelW, panelH, "#050914", "#6f8fa8", true);
 
     ctx.textBaseline = "middle";
@@ -5917,7 +5960,7 @@
     ctx.font = `900 ${titleSize}px ${UI_FONT}`;
     const titleText = "IRON REIGN";
     const titleWidth = ctx.measureText(titleText).width;
-    const titleStart = canvas.width / 2 - titleWidth / 2;
+    const titleStart = screenW / 2 - titleWidth / 2;
     const titleY = y + panelH * 0.10;
     ctx.textAlign = "left";
     ctx.fillStyle = "#02040a";
@@ -5927,21 +5970,21 @@
     ctx.fillStyle = "#ff4b3e";
     ctx.fillText("REIGN", titleStart + ctx.measureText("IRON ").width, titleY);
     ctx.textAlign = "center";
-    ctx.font = `900 ${compact ? 8 : 11}px ${UI_FONT}`;
+    ctx.font = `900 ${compact ? 10 : 12}px ${UI_FONT}`;
     ctx.fillStyle = "#fff36d";
-    ctx.fillText("★ FULL CANVAS ARCADE • ONE CREDIT ★", canvas.width / 2, y + panelH * 0.19);
+    ctx.fillText("★ FULL CANVAS ARCADE • ONE CREDIT ★", screenW / 2, y + panelH * 0.19);
 
     const zone = WORLD_ZONES[menuLevel];
     const labelW = Math.min(panelW - 34, 500);
-    const labelX = canvas.width / 2 - labelW / 2;
+    const labelX = screenW / 2 - labelW / 2;
     const contentTop = y + panelH * 0.27;
     ctx.fillStyle = "#4ce8ff";
-    ctx.font = `900 ${compact ? 10 : 14}px ${UI_FONT}`;
-    ctx.fillText(zone.title, canvas.width / 2, contentTop);
+    ctx.font = `900 ${compact ? 12 : 15}px ${UI_FONT}`;
+    ctx.fillText(zone.title, screenW / 2, contentTop);
     ctx.fillStyle = "#9db3bd";
-    ctx.font = `700 ${compact ? 7 : 9}px ${UI_FONT}`;
+    ctx.font = `700 ${compact ? 9 : 11}px ${UI_FONT}`;
     const descLines = wrapCanvasText(LEVEL_MENU_DESCRIPTIONS[menuLevel], labelW - 12).slice(0, compact ? 1 : 3);
-    descLines.forEach((line, i) => ctx.fillText(line, canvas.width / 2, contentTop + 15 + i * 11));
+    descLines.forEach((line, i) => ctx.fillText(line, screenW / 2, contentTop + 15 + i * 11));
 
     const rowH = clamp(Math.round(panelH * 0.105), 28, 42);
     const arrowW = compact ? 38 : 46;
@@ -5952,8 +5995,8 @@
     drawMenuArrow(uiRects.menu.levelNext, 1, menuFocus === 0);
     drawPixelPanel(labelX + arrowW + 5, row1Y, labelW - arrowW * 2 - 10, rowH, "#091426", menuFocus === 0 ? "#fff36d" : "#385b72", false);
     ctx.fillStyle = "#f4f1d0";
-    ctx.font = `900 ${compact ? 9 : 12}px ${UI_FONT}`;
-    ctx.fillText(`LEVEL ${menuLevel + 1} • ${zone.short}`, canvas.width / 2, row1Y + rowH / 2);
+    ctx.font = `900 ${compact ? 11 : 13}px ${UI_FONT}`;
+    ctx.fillText(`LEVEL ${menuLevel + 1} • ${zone.short}`, screenW / 2, row1Y + rowH / 2);
 
     const row2Y = y + panelH * 0.52;
     uiRects.menu.diffPrev = { x: labelX, y: row2Y, w: arrowW, h: rowH };
@@ -5962,7 +6005,7 @@
     drawMenuArrow(uiRects.menu.diffNext, 1, menuFocus === 1);
     drawPixelPanel(labelX + arrowW + 5, row2Y, labelW - arrowW * 2 - 10, rowH, "#091426", menuFocus === 1 ? "#fff36d" : "#385b72", false);
     ctx.fillStyle = "#f4f1d0";
-    ctx.fillText(`DIFFICULTY • ${DIFFICULTY_OPTIONS[menuDifficulty].label}`, canvas.width / 2, row2Y + rowH / 2);
+    ctx.fillText(`DIFFICULTY • ${DIFFICULTY_OPTIONS[menuDifficulty].label}`, screenW / 2, row2Y + rowH / 2);
 
     const buttonY = y + panelH * 0.64;
     const buttonGap = 10;
@@ -5972,7 +6015,7 @@
     drawPixelPanel(uiRects.menu.solo.x, uiRects.menu.solo.y, uiRects.menu.solo.w, uiRects.menu.solo.h, menuFocus === 2 ? "#d94137" : "#922d2e", menuFocus === 2 ? "#fff36d" : "#ff7d5e", true);
     drawPixelPanel(uiRects.menu.coop.x, uiRects.menu.coop.y, uiRects.menu.coop.w, uiRects.menu.coop.h, menuFocus === 3 ? "#174968" : "#102d47", menuFocus === 3 ? "#fff36d" : "#4ce8ff", true);
     ctx.fillStyle = "#ffffff";
-    ctx.font = `900 ${compact ? 9 : 11}px ${UI_FONT}`;
+    ctx.font = `900 ${compact ? 10 : 12}px ${UI_FONT}`;
     ctx.fillText(menuLevel === 0 ? "START CAMPAIGN" : `START LEVEL ${menuLevel + 1}`, uiRects.menu.solo.x + buttonW / 2, buttonY + (rowH + 3) / 2);
     ctx.fillText(isTouch ? "2P • KEYBOARD" : "2 PLAYER CO-OP", uiRects.menu.coop.x + buttonW / 2, buttonY + (rowH + 3) / 2);
 
@@ -5983,7 +6026,7 @@
     uiRects.menu.fullscreen = { x: labelX + settingsW + buttonGap, y: settingsY, w: settingsW, h: settingsH };
     drawPixelPanel(uiRects.menu.music.x, uiRects.menu.music.y, uiRects.menu.music.w, uiRects.menu.music.h, menuFocus === 4 ? "#453a12" : "#18160c", menuFocus === 4 ? "#fff36d" : "#8e7831", false);
     drawPixelPanel(uiRects.menu.fullscreen.x, uiRects.menu.fullscreen.y, uiRects.menu.fullscreen.w, uiRects.menu.fullscreen.h, menuFocus === 5 ? "#17344b" : "#0c1a2b", menuFocus === 5 ? "#fff36d" : "#4ce8ff", false);
-    ctx.font = `900 ${compact ? 8 : 9}px ${UI_FONT}`;
+    ctx.font = `900 ${compact ? 9 : 10}px ${UI_FONT}`;
     ctx.fillStyle = audio.musicMuted ? "#ff6b5c" : "#fff36d";
     ctx.fillText(audio.musicMuted ? "MUSIC OFF" : "MUSIC ON", uiRects.menu.music.x + settingsW / 2, settingsY + settingsH / 2);
     ctx.fillStyle = "#4ce8ff";
@@ -5991,45 +6034,45 @@
 
     if (menuResult) {
       ctx.fillStyle = menuResult.startsWith("CAMPAIGN") ? "#6dff82" : "#ff695b";
-      const resultSize = fitCanvasText(menuResult, panelW - 24, compact ? 8 : 10, 6);
+      const resultSize = fitCanvasText(menuResult, panelW - 24, compact ? 10 : 12, 8);
       ctx.font = `900 ${resultSize}px ${UI_FONT}`;
-      ctx.fillText(menuResult, canvas.width / 2, y + panelH * 0.89);
+      ctx.fillText(menuResult, screenW / 2, y + panelH * 0.89);
     } else {
       ctx.fillStyle = "#7f97a3";
       if (portrait && !compact) {
-        ctx.font = `700 7px ${UI_FONT}`;
-        ctx.fillText("LEFT HALF MOVE/AIM • DOWN CROUCH • C JUMP/SMASH", canvas.width / 2, y + panelH * 0.875);
-        ctx.fillText("A STRIKE • B FIRE • X FULLSCREEN", canvas.width / 2, y + panelH * 0.895);
+        ctx.font = `700 9px ${UI_FONT}`;
+        ctx.fillText("LEFT HALF MOVE/AIM • DOWN CROUCH • C JUMP/SMASH", screenW / 2, y + panelH * 0.875);
+        ctx.fillText("A STRIKE • B FIRE • X FULLSCREEN", screenW / 2, y + panelH * 0.895);
       } else {
         const instruction = compact
           ? "A STRIKE • B FIRE • C JUMP • X FULLSCREEN"
           : "MOVE/AIM • DOWN CROUCH/AIR-AIM • C DOUBLE-JUMP • DOWN+C SMASH • A STRIKE • B FIRE • X FULLSCREEN";
-        const instructionSize = fitCanvasText(instruction, panelW - 24, compact ? 6 : 7, 5);
+        const instructionSize = fitCanvasText(instruction, panelW - 24, compact ? 8 : 9, 7);
         ctx.font = `700 ${instructionSize}px ${UI_FONT}`;
-        ctx.fillText(instruction, canvas.width / 2, y + panelH * 0.89);
+        ctx.fillText(instruction, screenW / 2, y + panelH * 0.89);
       }
     }
     ctx.fillStyle = "#536675";
-    ctx.font = `700 7px ${UI_FONT}`;
+    ctx.font = `700 9px ${UI_FONT}`;
     ctx.textAlign = "right";
-    ctx.fillText("v4.6 • MULTI-TOUCH CONTROL", x + panelW - 9, y + panelH - 8);
+    ctx.fillText("v4.9 • PRECISE MULTI-TOUCH", x + panelW - 9, y + panelH - 8);
   }
 
   function drawHealthCard(player, x, y, right = false) {
-    const w = Math.min(155, canvas.width * 0.31);
+    const w = Math.min(155, screenW * 0.31);
     const h = 40;
     drawPixelPanel(x, y, w, h, "#07101d", player.color, true);
     const ratio = clamp(player.health / player.maxHealth, 0, 1);
     const healthColor = ratio > 0.55 ? "#57df6c" : ratio > 0.25 ? "#ffd34d" : "#ff4b3e";
     ctx.textAlign = right ? "right" : "left";
     ctx.textBaseline = "top";
-    ctx.font = `900 9px ${UI_FONT}`;
+    ctx.font = `900 12px ${UI_FONT}`;
     ctx.fillStyle = "#f4f1d0";
     ctx.fillText(`P${player.index + 1} • ${weaponName(player.weapon)}`, right ? x + w - 7 : x + 7, y + 5);
     ctx.fillStyle = "#101621"; ctx.fillRect(x + 7, y + 18, w - 14, 7);
     ctx.fillStyle = healthColor; ctx.fillRect(x + 7, y + 18, (w - 14) * ratio, 7);
     ctx.fillStyle = "#9db3bd";
-    ctx.font = `700 7px ${UI_FONT}`;
+    ctx.font = `700 9px ${UI_FONT}`;
     ctx.fillText(`L${player.lives}  A×${player.specials}  ${String(player.score).padStart(6, "0")}`, right ? x + w - 7 : x + 7, y + 29);
     return w;
   }
@@ -6039,45 +6082,45 @@
     const topPad = pad + safeTop;
     if (players[0]) drawHealthCard(players[0], pad + safeLeft, topPad, false);
     if (players[1]) {
-      const w = Math.min(155, canvas.width * 0.31);
-      drawHealthCard(players[1], canvas.width - w - pad - safeRight, topPad, true);
+      const w = Math.min(155, screenW * 0.31);
+      drawHealthCard(players[1], screenW - w - pad - safeRight, topPad, true);
     }
-    const progressW = Math.min(220, canvas.width * (players[1] ? 0.25 : 0.34));
-    const progressX = canvas.width / 2 - progressW / 2;
+    const progressW = Math.min(220, screenW * (players[1] ? 0.25 : 0.34));
+    const progressX = screenW / 2 - progressW / 2;
     const progressY = 8 + safeTop;
     ctx.fillStyle = "#07101d"; ctx.fillRect(progressX, progressY, progressW, 9);
     ctx.strokeStyle = "#6f8fa8"; ctx.lineWidth = 2; ctx.strokeRect(progressX + 1, progressY + 1, progressW - 2, 7);
     ctx.fillStyle = "#4ce8ff"; ctx.fillRect(progressX + 3, progressY + 3, (progressW - 6) * hudState.progress, 3);
     ctx.textAlign = "center"; ctx.textBaseline = "top";
-    const phaseSize = fitCanvasText(hudState.phase, progressW + 72, 8, 6);
+    const phaseSize = fitCanvasText(hudState.phase, progressW + 72, 10, 8);
     ctx.font = `900 ${phaseSize}px ${UI_FONT}`; ctx.fillStyle = "#c9e9ef";
-    ctx.fillText(hudState.phase, canvas.width / 2, progressY + 12);
+    ctx.fillText(hudState.phase, screenW / 2, progressY + 12);
 
     const iconSize = isTouch ? 32 : 28;
-    uiRects.pause = { x: canvas.width / 2 - iconSize / 2, y: 31 + safeTop, w: iconSize, h: 26 };
+    uiRects.pause = { x: screenW / 2 - iconSize / 2, y: 31 + safeTop, w: iconSize, h: 26 };
     drawPixelPanel(uiRects.pause.x, uiRects.pause.y, uiRects.pause.w, uiRects.pause.h, "#07101d", "#6f8fa8", false);
-    ctx.fillStyle = "#f4f1d0"; ctx.font = `900 12px ${UI_FONT}`; ctx.textBaseline = "middle";
-    ctx.fillText(paused ? "▶" : "Ⅱ", canvas.width / 2, uiRects.pause.y + uiRects.pause.h / 2 + 1);
+    ctx.fillStyle = "#f4f1d0"; ctx.font = `900 13px ${UI_FONT}`; ctx.textBaseline = "middle";
+    ctx.fillText(paused ? "▶" : "Ⅱ", screenW / 2, uiRects.pause.y + uiRects.pause.h / 2 + 1);
 
     const utilityY = (players[1] ? 52 : 7) + safeTop;
-    uiRects.fullscreen = { x: canvas.width - safeRight - iconSize * 2 - 12, y: utilityY, w: iconSize, h: 26 };
-    uiRects.mute = { x: canvas.width - safeRight - iconSize - 7, y: utilityY, w: iconSize, h: 26 };
+    uiRects.fullscreen = { x: screenW - safeRight - iconSize * 2 - 12, y: utilityY, w: iconSize, h: 26 };
+    uiRects.mute = { x: screenW - safeRight - iconSize - 7, y: utilityY, w: iconSize, h: 26 };
     drawPixelPanel(uiRects.fullscreen.x, uiRects.fullscreen.y, uiRects.fullscreen.w, uiRects.fullscreen.h, "#07101d", fullscreenActive() ? "#fff36d" : "#4ce8ff", false);
     drawPixelPanel(uiRects.mute.x, uiRects.mute.y, uiRects.mute.w, uiRects.mute.h, "#07101d", audio.musicMuted ? "#ff6b5c" : "#6f8fa8", false);
-    ctx.font = `900 9px ${UI_FONT}`;
+    ctx.font = `900 12px ${UI_FONT}`;
     ctx.fillStyle = fullscreenActive() ? "#fff36d" : "#4ce8ff";
     ctx.fillText("FS", uiRects.fullscreen.x + uiRects.fullscreen.w / 2, uiRects.fullscreen.y + uiRects.fullscreen.h / 2 + 1);
     ctx.fillStyle = audio.musicMuted ? "#ff6b5c" : "#fff36d";
-    ctx.font = `900 11px ${UI_FONT}`;
+    ctx.font = `900 12px ${UI_FONT}`;
     ctx.fillText(audio.musicMuted ? "×" : "♫", uiRects.mute.x + uiRects.mute.w / 2, uiRects.mute.y + uiRects.mute.h / 2 + 1);
 
     if (activeBoss && !activeBoss.dead) {
-      const w = Math.min(canvas.width * 0.70, 430);
-      const x = canvas.width / 2 - w / 2;
+      const w = Math.min(screenW * 0.70, 430);
+      const x = screenW / 2 - w / 2;
       const y = (players[1] ? 80 : 61) + safeTop;
       const ratio = clamp(activeBoss.health / activeBoss.maxHealth, 0, 1);
-      ctx.textAlign = "center"; ctx.textBaseline = "bottom"; ctx.font = `900 9px ${UI_FONT}`; ctx.fillStyle = "#fff36d";
-      ctx.fillText(activeBoss.name, canvas.width / 2, y - 2);
+      ctx.textAlign = "center"; ctx.textBaseline = "bottom"; ctx.font = `900 12px ${UI_FONT}`; ctx.fillStyle = "#fff36d";
+      ctx.fillText(activeBoss.name, screenW / 2, y - 2);
       ctx.fillStyle = "#18080c"; ctx.fillRect(x, y, w, 9);
       ctx.strokeStyle = "#f4f1d0"; ctx.lineWidth = 2; ctx.strokeRect(x + 1, y + 1, w - 2, 7);
       ctx.fillStyle = activeBoss.profile.accent; ctx.fillRect(x + 3, y + 3, (w - 6) * ratio, 3);
@@ -6087,13 +6130,13 @@
       const remaining = Math.max(0, bannerUntil - performance.now());
       const alpha = Math.min(1, remaining / 180);
       ctx.globalAlpha = alpha;
-      const size = fitCanvasText(bannerText, canvas.width * 0.88, Math.max(18, canvas.width * 0.055), 12);
+      const size = fitCanvasText(bannerText, screenW * 0.88, Math.max(18, screenW * 0.055), 12);
       ctx.font = `900 ${size}px ${UI_FONT}`;
       ctx.textAlign = "center"; ctx.textBaseline = "middle";
       const tw = ctx.measureText(bannerText).width;
-      ctx.fillStyle = "rgba(0,0,0,.58)"; ctx.fillRect(canvas.width / 2 - tw / 2 - 9, canvas.height * 0.22 - size * 0.65, tw + 18, size * 1.3);
-      ctx.fillStyle = "#02040a"; ctx.fillText(bannerText, canvas.width / 2 + 3, canvas.height * 0.22 + 3);
-      ctx.fillStyle = "#fff36d"; ctx.fillText(bannerText, canvas.width / 2, canvas.height * 0.22);
+      ctx.fillStyle = "rgba(0,0,0,.58)"; ctx.fillRect(screenW / 2 - tw / 2 - 9, screenH * 0.22 - size * 0.65, tw + 18, size * 1.3);
+      ctx.fillStyle = "#02040a"; ctx.fillText(bannerText, screenW / 2 + 3, screenH * 0.22 + 3);
+      ctx.fillStyle = "#fff36d"; ctx.fillText(bannerText, screenW / 2, screenH * 0.22);
       ctx.globalAlpha = 1;
     }
   }
@@ -6101,12 +6144,7 @@
   function drawCanvasTouchControls() {
     if (!isTouch || !running || paused || stageIntro || levelTransition || portalWarp) return;
 
-    const cssW = canvas.width / dpr;
-    const cssH = canvas.height / dpr;
-    const px = value => value * dpr;
-    const safeRightCss = safeRight / dpr;
-    const safeBottomCss = safeBottom / dpr;
-    uiRects.stick = { x: 0, y: 0, w: canvas.width * 0.5, h: canvas.height };
+    uiRects.stick = { x: 0, y: 0, w: screenW * 0.5, h: screenH };
     uiRects.buttons = {};
 
     ctx.save();
@@ -6118,9 +6156,9 @@
       ctx.fillStyle = "rgba(4,12,24,.48)";
       ctx.beginPath(); ctx.arc(baseX, baseY, stickRadius, 0, Math.PI * 2); ctx.fill();
       ctx.strokeStyle = "rgba(177,215,232,.86)";
-      ctx.lineWidth = px(2.0); ctx.stroke();
+      ctx.lineWidth = 2; ctx.stroke();
       ctx.strokeStyle = "rgba(76,232,255,.38)";
-      ctx.lineWidth = px(1.1);
+      ctx.lineWidth = 1.1;
       ctx.beginPath();
       ctx.moveTo(baseX - stickRadius * .68, baseY); ctx.lineTo(baseX + stickRadius * .68, baseY);
       ctx.moveTo(baseX, baseY - stickRadius * .68); ctx.lineTo(baseX, baseY + stickRadius * .68);
@@ -6130,10 +6168,10 @@
       const ky = baseY + touchStick.knobY;
       ctx.fillStyle = "rgba(52,79,108,.94)";
       ctx.beginPath(); ctx.arc(kx, ky, stickRadius * 0.40, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = "#4ce8ff"; ctx.lineWidth = px(2); ctx.stroke();
+      ctx.strokeStyle = "#4ce8ff"; ctx.lineWidth = 2; ctx.stroke();
 
       const angle = Math.atan2(touchStick.aimY, touchStick.aimX);
-      ctx.strokeStyle = "#4ce8ff"; ctx.lineWidth = px(2.2);
+      ctx.strokeStyle = "#4ce8ff"; ctx.lineWidth = 2.2;
       ctx.beginPath();
       ctx.moveTo(baseX, baseY);
       ctx.lineTo(baseX + Math.cos(angle) * stickRadius * 0.78, baseY + Math.sin(angle) * stickRadius * 0.78);
@@ -6142,20 +6180,18 @@
 
     let defs;
     if (portrait) {
-      const r = clamp(cssW * 0.086, 32, 42);
-      const fireX = cssW - safeRightCss - r - 14;
-      const fireY = cssH - safeBottomCss - r - 22;
+      const r = clamp(screenW * 0.086, 32, 42);
+      const fireX = screenW - safeRight - r - 14;
+      const fireY = screenH - safeBottom - r - 22;
       defs = [
         ["KeyG", "A", "STRIKE", fireX - r * 3.65, fireY + r * 0.12, r * 0.88, "#d39a28"],
         ["KeyF", "B", "FIRE", fireX - r * 1.80, fireY, r, "#b92f35"],
         ["KeyW", "C", "JUMP", fireX, fireY - r * 0.30, r, "#285b91"]
       ];
     } else {
-      // Compact controller arc in the bottom-right corner. It occupies less than
-      // one quarter of a normal phone display and has no opaque backing panel.
-      const r = clamp(cssH * 0.073, 26, 31);
-      const edgeX = cssW - safeRightCss - r - 13;
-      const edgeY = cssH - safeBottomCss - r - 13;
+      const r = clamp(screenH * 0.073, 26, 31);
+      const edgeX = screenW - safeRight - r - 13;
+      const edgeY = screenH - safeBottom - r - 13;
       defs = [
         ["KeyG", "A", "STRIKE", edgeX - r * 4.35, edgeY + r * 0.06, r * 0.82, "#d39a28"],
         ["KeyF", "B", "FIRE", edgeX - r * 2.18, edgeY, r, "#b92f35"],
@@ -6163,23 +6199,22 @@
       ];
     }
 
-    for (const [code, letter, label, cssX, cssY, cssR, color] of defs) {
-      const x = px(cssX), y = px(cssY), r = px(cssR);
+    for (const [code, letter, label, x, y, r, color] of defs) {
       uiRects.buttons[code] = { x, y, r };
       const held = Boolean(touchKeys[code]);
       ctx.globalAlpha = held ? 0.98 : (portrait ? 0.78 : 0.68);
       ctx.fillStyle = "rgba(0,0,0,.42)";
-      ctx.beginPath(); ctx.arc(x + px(2), y + px(3), r, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(x + 2, y + 3, r, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = held ? "#f6f3dc" : color;
       ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
       ctx.strokeStyle = held ? "#fff36d" : "rgba(255,255,255,.88)";
-      ctx.lineWidth = px(2.2); ctx.stroke();
+      ctx.lineWidth = 2.2; ctx.stroke();
       ctx.fillStyle = held ? color : "#ffffff";
       ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.font = `900 ${px(cssR * 0.60)}px ${UI_FONT}`;
-      ctx.fillText(letter, x, y - px(cssR * 0.10));
-      ctx.font = `800 ${px(Math.max(7, cssR * 0.22))}px ${UI_FONT}`;
-      ctx.fillText(label, x, y + px(cssR * 0.43));
+      ctx.font = `900 ${r * 0.60}px ${UI_FONT}`;
+      ctx.fillText(letter, x, y - r * 0.10);
+      ctx.font = `800 ${Math.max(8, r * 0.24)}px ${UI_FONT}`;
+      ctx.fillText(label, x, y + r * 0.43);
     }
     ctx.restore();
   }
@@ -6196,26 +6231,26 @@
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.fillStyle = "rgba(1,4,10,.82)";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    const panelW = Math.min(canvas.width * 0.88, 560);
-    const panelH = Math.min(canvas.height * 0.52, 210);
-    const x = canvas.width / 2 - panelW / 2;
-    const y = canvas.height / 2 - panelH / 2;
+    ctx.fillRect(0, 0, screenW, screenH);
+    const panelW = Math.min(screenW * 0.88, 560);
+    const panelH = Math.min(screenH * 0.52, 210);
+    const x = screenW / 2 - panelW / 2;
+    const y = screenH / 2 - panelH / 2;
     drawPixelPanel(x, y, panelW, panelH, "#07101d", "#4ce8ff", true);
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillStyle = "#4ce8ff";
     ctx.font = `900 ${clamp(Math.round(panelH * 0.14), 16, 28)}px ${UI_FONT}`;
-    ctx.fillText(`LEVEL ${stageIntro.level + 1}`, canvas.width / 2, y + panelH * 0.24);
+    ctx.fillText(`LEVEL ${stageIntro.level + 1}`, screenW / 2, y + panelH * 0.24);
     ctx.fillStyle = "#f4f1d0";
     ctx.font = `900 ${fitCanvasText(zone.short, panelW * 0.86, clamp(Math.round(panelH * 0.20), 22, 42), 14)}px ${UI_FONT}`;
-    ctx.fillText(zone.short, canvas.width / 2, y + panelH * 0.47);
+    ctx.fillText(zone.short, screenW / 2, y + panelH * 0.47);
     ctx.fillStyle = "#9db3bd";
     ctx.font = `900 ${clamp(Math.round(panelH * 0.075), 9, 14)}px ${UI_FONT}`;
-    ctx.fillText(stageMechanicText(stageIntro.level), canvas.width / 2, y + panelH * 0.64);
+    ctx.fillText(stageMechanicText(stageIntro.level), screenW / 2, y + panelH * 0.64);
     ctx.fillStyle = ready ? "#fff36d" : "#6dff82";
     ctx.font = `900 ${clamp(Math.round(panelH * 0.18), 22, 38)}px ${UI_FONT}`;
-    ctx.fillText(ready ? "READY" : "GO!", canvas.width / 2, y + panelH * 0.82);
+    ctx.fillText(ready ? "READY" : "GO!", screenW / 2, y + panelH * 0.82);
     ctx.restore();
   }
 
@@ -6227,33 +6262,33 @@
 
     ctx.save();
     ctx.fillStyle = "#010207";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillRect(0, 0, screenW, screenH);
 
-    const panelW = Math.min(canvas.width * 0.86, 620);
-    const panelH = Math.min(canvas.height * 0.56, 250);
-    const x = canvas.width / 2 - panelW / 2;
-    const y = canvas.height / 2 - panelH / 2;
+    const panelW = Math.min(screenW * 0.86, 620);
+    const panelH = Math.min(screenH * 0.56, 250);
+    const x = screenW / 2 - panelW / 2;
+    const y = screenH / 2 - panelH / 2;
     drawPixelPanel(x, y, panelW, panelH, "#07101d", "#fff36d", true);
 
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillStyle = "#6dff82";
     ctx.font = `900 ${clamp(Math.round(panelH * 0.15), 20, 34)}px ${UI_FONT}`;
-    ctx.fillText(`LEVEL ${levelTransition.nextLevel} COMPLETE`, canvas.width / 2, y + panelH * 0.23);
+    ctx.fillText(`LEVEL ${levelTransition.nextLevel} COMPLETE`, screenW / 2, y + panelH * 0.23);
 
     ctx.fillStyle = "#f4f1d0";
     ctx.font = `900 ${clamp(Math.round(panelH * 0.11), 15, 25)}px ${UI_FONT}`;
-    ctx.fillText("AREA CLEARED • LOADOUT SAVED", canvas.width / 2, y + panelH * 0.43);
+    ctx.fillText("AREA CLEARED • LOADOUT SAVED", screenW / 2, y + panelH * 0.43);
 
     ctx.globalAlpha = pulse;
     ctx.fillStyle = "#63e5ff";
     ctx.font = `900 ${clamp(Math.round(panelH * 0.10), 14, 23)}px ${UI_FONT}`;
-    ctx.fillText(`NEXT • ${nextZone.short}`, canvas.width / 2, y + panelH * 0.66);
+    ctx.fillText(`NEXT • ${nextZone.short}`, screenW / 2, y + panelH * 0.66);
     ctx.globalAlpha = 1;
 
     const progress = clamp(1 - levelTransition.timer / levelTransition.duration, 0, 1);
     const barW = panelW * 0.68;
-    const barX = canvas.width / 2 - barW / 2;
+    const barX = screenW / 2 - barW / 2;
     const barY = y + panelH * 0.82;
     ctx.fillStyle = "#121925";
     ctx.fillRect(barX, barY, barW, 10);
@@ -6293,6 +6328,7 @@
     ctx.lineJoin = "round";
     ctx.lineCap = "round";
     if (!running && levelState === "menu") {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       drawCanvasMenu();
       return;
     }
@@ -6320,9 +6356,15 @@
     if (specialAttack) specialAttack.draw();
     for (const piece of debris) if (inView(piece, 260)) piece.draw();
     for (const particle of particles) if (inView(particle, 170)) particle.draw();
-    for (const blast of blastEffects) if (inView({ x: blast.x - 180, y: blast.y - 180, w: 360, h: 360 }, 100)) blast.draw();
-    for (const text of floatingTexts) if (inView({ x: text.x - 100, y: text.y - 30, w: 200, h: 60 }, 80)) text.draw();
+    for (const blast of blastEffects) if (inViewRect(blast.x - 180, blast.y - 180, 360, 360, 100)) blast.draw();
+    for (const text of floatingTexts) if (inViewRect(text.x - 100, text.y - 30, 200, 60, 80)) text.draw();
     ctx.restore();
+
+    // All overlays and controls use CSS-pixel coordinates. The backing buffer is
+    // independently scaled for Retina sharpness, so text stays crisp without
+    // changing the visual size or touch targets.
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.imageSmoothingEnabled = true;
 
     if (victoryScene) victoryScene.drawOverlay();
     if (levelTransition) {
@@ -6336,27 +6378,31 @@
 
     if (paused) {
       ctx.fillStyle = "rgba(0,0,0,.72)";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      const w = Math.min(300, canvas.width * 0.72);
+      ctx.fillRect(0, 0, screenW, screenH);
+      const w = Math.min(300, screenW * 0.72);
       const h = 104;
-      drawPixelPanel(canvas.width / 2 - w / 2, canvas.height / 2 - h / 2, w, h, "#07101d", "#fff36d", true);
+      drawPixelPanel(screenW / 2 - w / 2, screenH / 2 - h / 2, w, h, "#07101d", "#fff36d", true);
       ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.font = `900 ${Math.max(24, Math.round(canvas.width * 0.06))}px ${UI_FONT}`;
-      ctx.fillStyle = "#fff36d"; ctx.fillText("PAUSED", canvas.width / 2, canvas.height / 2 - 13);
-      ctx.font = `900 9px ${UI_FONT}`; ctx.fillStyle = "#9db3bd";
-      ctx.fillText("TAP ▶ OR PRESS P TO RESUME", canvas.width / 2, canvas.height / 2 + 22);
-      uiRects.pause = { x: canvas.width / 2 - 34, y: canvas.height / 2 + 34, w: 68, h: 30 };
+      ctx.font = `900 ${Math.max(24, Math.round(screenW * 0.06))}px ${UI_FONT}`;
+      ctx.fillStyle = "#fff36d"; ctx.fillText("PAUSED", screenW / 2, screenH / 2 - 13);
+      ctx.font = `900 12px ${UI_FONT}`; ctx.fillStyle = "#9db3bd";
+      ctx.fillText("TAP ▶ OR PRESS P TO RESUME", screenW / 2, screenH / 2 + 22);
+      uiRects.pause = { x: screenW / 2 - 34, y: screenH / 2 + 34, w: 68, h: 30 };
       drawPixelPanel(uiRects.pause.x, uiRects.pause.y, uiRects.pause.w, uiRects.pause.h, "#17344b", "#fff36d", false);
       ctx.fillStyle = "#fff36d"; ctx.font = `900 13px ${UI_FONT}`;
-      ctx.fillText("▶", canvas.width / 2, uiRects.pause.y + uiRects.pause.h / 2 + 1);
+      ctx.fillText("▶", screenW / 2, uiRects.pause.y + uiRects.pause.h / 2 + 1);
     }
   }
 
   function inView(entity, padding = 120) {
-    return entity.x + entity.w > cameraX - padding &&
-           entity.x < cameraX + visibleWorldW + padding &&
-           entity.y + entity.h > cameraY - padding &&
-           entity.y < cameraY + visibleWorldH + padding;
+    return inViewRect(entity.x, entity.y, entity.w, entity.h, padding);
+  }
+
+  function inViewRect(x, y, w, h, padding = 120) {
+    return x + w > cameraX - padding &&
+           x < cameraX + visibleWorldW + padding &&
+           y + h > cameraY - padding &&
+           y < cameraY + visibleWorldH + padding;
   }
 
   function roundRect(x, y, w, h, radius) {
@@ -6374,6 +6420,12 @@
   }
 
   function loop(now) {
+    if (document.hidden) {
+      last = now;
+      requestAnimationFrame(loop);
+      return;
+    }
+
     const frame = Math.min(0.05, (now - last) / 1000);
     last = now;
 
@@ -6423,8 +6475,8 @@
   function canvasPoint(event) {
     const rect = canvas.getBoundingClientRect();
     return {
-      x: (event.clientX - rect.left) * canvas.width / Math.max(1, rect.width),
-      y: (event.clientY - rect.top) * canvas.height / Math.max(1, rect.height)
+      x: (event.clientX - rect.left) * screenW / Math.max(1, rect.width),
+      y: (event.clientY - rect.top) * screenH / Math.max(1, rect.height)
     };
   }
 
@@ -6461,8 +6513,8 @@
   }
 
   function actionCodesAtPoint(point, event) {
-    const contactX = Math.max(0, (event.width || 1) * dpr * 0.34);
-    const contactY = Math.max(0, (event.height || 1) * dpr * 0.34);
+    const contactX = Math.max(0, (event.width || 1) * 0.34);
+    const contactY = Math.max(0, (event.height || 1) * 0.34);
     const codes = [];
 
     for (const [code, rect] of Object.entries(uiRects.buttons)) {
@@ -6475,22 +6527,31 @@
     return codes;
   }
 
-  function addCanvasActions(pointerId, codes) {
-    if (!codes.length) return false;
-    let held = pointerActions.get(pointerId);
-    if (!held) {
-      held = new Set();
-      pointerActions.set(pointerId, held);
+  function updateCanvasActions(pointerId, codes) {
+    const previous = pointerActions.get(pointerId);
+    if (!previous && !codes.length) return false;
+
+    const next = new Set(codes);
+    let changed = !previous || previous.size !== next.size;
+    if (!changed) {
+      for (const code of next) {
+        if (!previous.has(code)) {
+          changed = true;
+          break;
+        }
+      }
     }
 
-    let changed = false;
-    for (const code of codes) {
-      if (held.has(code)) continue;
-      held.add(code);
-      changed = true;
-      if (code === "KeyW" || code === "KeyG") queuePress(code);
+    for (const code of next) {
+      if ((!previous || !previous.has(code)) && (code === "KeyW" || code === "KeyG")) {
+        queuePress(code);
+      }
     }
-    if (changed) refreshTouchActions();
+
+    if (changed) {
+      pointerActions.set(pointerId, next);
+      refreshTouchActions();
+    }
     return true;
   }
 
@@ -6547,20 +6608,17 @@
 
     if (isTouch) {
       const actionCodes = actionCodesAtPoint(point, event);
-      if (addCanvasActions(event.pointerId, actionCodes)) return;
+      if (updateCanvasActions(event.pointerId, actionCodes)) return;
 
-      if (!touchStick.active && point.x <= canvas.width * 0.5) {
-        const cssW = canvas.width / dpr;
-        const cssH = canvas.height / dpr;
-        const radiusCss = portrait
-          ? clamp(cssW * 0.12, 42, 54)
-          : clamp(cssH * 0.105, 34, 43);
-        const radius = radiusCss * dpr;
+      if (!touchStick.active && point.x <= screenW * 0.5) {
+        const radius = portrait
+          ? clamp(screenW * 0.12, 42, 54)
+          : clamp(screenH * 0.105, 34, 43);
         touchStick.active = true;
         touchStick.pointerId = event.pointerId;
         touchStick.radius = radius;
-        touchStick.baseX = clamp(point.x, safeLeft + radius * 0.72, canvas.width * 0.5 - radius * 0.35);
-        touchStick.baseY = clamp(point.y, safeTop + radius * 0.72, canvas.height - safeBottom - radius * 0.72);
+        touchStick.baseX = clamp(point.x, safeLeft + radius * 0.72, screenW * 0.5 - radius * 0.35);
+        touchStick.baseY = clamp(point.y, safeTop + radius * 0.72, screenH - safeBottom - radius * 0.72);
         updateStickPoint(point.x, point.y);
         return;
       }
@@ -6576,9 +6634,9 @@
     const point = canvasPoint(event);
     if (controlsJoystick) updateStickPoint(point.x, point.y);
 
-    // A button pointer keeps its original action held and can collect another
-    // action while sliding across it. This supports B+Jump with one broad finger.
-    if (controlsActions) addCanvasActions(event.pointerId, actionCodesAtPoint(point, event));
+    // Recalculate the buttons under this contact on every move. A broad finger
+    // can hold B+C together, and either button releases as soon as contact leaves it.
+    if (controlsActions) updateCanvasActions(event.pointerId, actionCodesAtPoint(point, event));
   });
 
   for (const name of ["pointerup", "pointercancel", "lostpointercapture"]) {
@@ -6616,13 +6674,13 @@
   addEventListener("keyup", event => { keys[event.code] = false; });
   addEventListener("blur", () => {
     clearControls();
+    last = performance.now();
     if (running && !paused) togglePause();
   });
   document.addEventListener("visibilitychange", () => {
-    if (document.hidden) {
-      clearControls();
-      if (running && !paused) togglePause();
-    }
+    clearControls();
+    last = performance.now();
+    if (document.hidden && running && !paused) togglePause();
   });
 
   setupLevel();
