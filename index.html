@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>Iron Reign: Urban Assault v8.3.0 Online</title>
+<title>Iron Reign: Urban Assault v8.3.1 Online</title>
 <style>
   :root {
     --safe-top: env(safe-area-inset-top, 0px);
@@ -43,7 +43,7 @@
 (() => {
   "use strict";
 
-  // IRON REIGN ONLINE v8.3.0 SYSTEMS REBUILD
+  // IRON REIGN ONLINE v8.3.1 MULTIPLAYER STATE FIX
 
   const canvas = document.getElementById("game");
   const ctx = canvas.getContext("2d", { alpha: false });
@@ -80,7 +80,7 @@
   });
 
   const MULTIPLAYER_PROTOCOL = 1;
-  const MULTIPLAYER_VERSION = "iron-reign-online-8.2.2";
+  const MULTIPLAYER_VERSION = "iron-reign-online-8.3.1";
   const ROOM_CODE_LENGTH = 5;
   const MAX_ONLINE_PLAYERS = 4;
   const ONLINE_API = ["localhost", "127.0.0.1"].includes(location.hostname)
@@ -143,6 +143,12 @@
   const isNetworkAuthority = () => onlineSession() && net.localId >= 0 && net.localId === net.authorityId;
   const connectedSocket = () => Boolean(net.socket && net.socket.readyState === WebSocket.OPEN && net.connected);
   const normalizeRoomCode = value => String(value || "").toUpperCase().replace(/[^A-HJ-NP-Z2-9]/g, "").slice(0, ROOM_CODE_LENGTH);
+  const boundedIndex = (value, fallback, length) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed)
+      ? clamp(Math.trunc(parsed), 0, Math.max(0, length - 1))
+      : clamp(Math.trunc(fallback), 0, Math.max(0, length - 1));
+  };
   const inviteUrl = code => {
     try {
       const url = new URL(location.href);
@@ -500,6 +506,7 @@
   let accumulator = 0;
   let running = false;
   let paused = false;
+  let onlineMenuOpen = false;
   let gameOver = false;
   let difficulty = DIFFICULTY_OPTIONS[1];
   let time = 0;
@@ -1560,6 +1567,27 @@
 
 
   function readLocalControls(player, consumePresses = true) {
+    if (onlineMenuOpen) {
+      if (consumePresses) {
+        takePress("KeyW");
+        takePress("KeyE");
+        takePress("KeyF");
+        takePress("KeyG");
+      }
+      return {
+        moveX: 0,
+        aimX: player.aimX || player.facing || 1,
+        aimY: player.aimY || 0,
+        jump: false,
+        jumpPressed: false,
+        down: false,
+        duck: false,
+        fire: false,
+        firePressed: false,
+        power: false,
+        powerPressed: false
+      };
+    }
     const useTouch = touchUi && touchStick.active;
     const keyboardMove = (pressed("KeyD") ? 1 : 0) - (pressed("KeyA") ? 1 : 0);
     const down = useTouch ? touchStick.down : pressed("KeyS");
@@ -8897,6 +8925,24 @@
       Math.abs(a.aimX - b.aimX) > 0.025 || Math.abs(a.aimY - b.aimY) > 0.025;
   }
 
+  function publishNeutralNetworkInput() {
+    if (!onlineSession() || !running || net.localId < 0) return;
+    const previous = net.localInput || neutralNetworkInput();
+    const next = {
+      ...neutralNetworkInput(),
+      aimX: Number.isFinite(Number(previous.aimX)) ? Number(previous.aimX) : 1,
+      aimY: Number.isFinite(Number(previous.aimY)) ? Number(previous.aimY) : 0,
+      fireSeq: Math.max(0, Number(previous.fireSeq) || 0),
+      jumpSeq: Math.max(0, Number(previous.jumpSeq) || 0),
+      powerSeq: Math.max(0, Number(previous.powerSeq) || 0),
+      seq: Math.max(0, Number(previous.seq) || 0) + 1
+    };
+    net.localInput = next;
+    net.inputs.set(net.localId, next);
+    net.inputSendAt = performance.now() + 80;
+    sendServer({ t: "input", v: next, seq: next.seq });
+  }
+
   function captureNetworkInput() {
     if (!onlineSession() || !running) return;
     const player = localPlayer();
@@ -9167,6 +9213,7 @@
     net.socket = null;
     net.connected = false;
     net.role = role;
+    net.phase = "lobby";
     net.localId = -1;
     net.ownerId = -1;
     net.authorityId = -1;
@@ -9176,6 +9223,7 @@
     net.localInput = neutralNetworkInput();
     net.lastSnapshotSeq = 0;
     net.pendingStartSnapshot = null;
+    onlineMenuOpen = false;
     if (!preserveRoom) net.roomCode = "";
     net.manualClose = false;
   }
@@ -9201,7 +9249,7 @@
         id,
         connected: row.connected !== false,
         ready: Boolean(row.ready),
-        character: clamp(Number(row.character) || 0, 0, CHARACTER_PROFILES.length - 1),
+        character: boundedIndex(row.character, 0, CHARACTER_PROFILES.length),
         owner: Boolean(row.owner)
       });
     }
@@ -9223,11 +9271,11 @@
       net.seed = Number(message.seed) || 1;
       updateRoster(message.roster);
       if (message.settings) {
-        menuLevel = clamp(Number(message.settings.level) || 0, 0, WORLD_ZONES.length - 1);
-        menuDifficulty = clamp(Number(message.settings.difficulty) || 1, 0, DIFFICULTY_OPTIONS.length - 1);
+        menuLevel = boundedIndex(message.settings.level, menuLevel, WORLD_ZONES.length);
+        menuDifficulty = boundedIndex(message.settings.difficulty, menuDifficulty, DIFFICULTY_OPTIONS.length);
       }
       const localRow = net.roster.get(net.localId);
-      const preferred = clamp(Number(net.preferredCharacter) || 0, 0, CHARACTER_PROFILES.length - 1);
+      const preferred = boundedIndex(net.preferredCharacter, 0, CHARACTER_PROFILES.length);
       menuCharacter = preferred;
       if (localRow && localRow.character !== preferred) sendServer({ t: "character", character: preferred });
       setNetworkStatus("CONNECTED", "success");
@@ -9244,8 +9292,8 @@
       net.phase = message.phase || net.phase;
       updateRoster(message.roster);
       if (message.settings) {
-        menuLevel = clamp(Number(message.settings.level) || 0, 0, WORLD_ZONES.length - 1);
-        menuDifficulty = clamp(Number(message.settings.difficulty) || 1, 0, DIFFICULTY_OPTIONS.length - 1);
+        menuLevel = boundedIndex(message.settings.level, menuLevel, WORLD_ZONES.length);
+        menuDifficulty = boundedIndex(message.settings.difficulty, menuDifficulty, DIFFICULTY_OPTIONS.length);
       }
       return;
     }
@@ -9394,6 +9442,7 @@
   }
 
   function leaveOnlineSession(returnToMain = true) {
+    onlineMenuOpen = false;
     net.manualClose = true;
     if (connectedSocket()) sendServer({ t: "leave" });
     if (net.socket) {
@@ -9440,11 +9489,12 @@
   }
 
   function startOnlineMatch(message) {
+    onlineMenuOpen = false;
     net.phase = "playing";
     net.seed = Number(message.seed) || net.seed || 1;
     if (message.settings) {
-      menuLevel = clamp(Number(message.settings.level) || 0, 0, WORLD_ZONES.length - 1);
-      menuDifficulty = clamp(Number(message.settings.difficulty) || 1, 0, DIFFICULTY_OPTIONS.length - 1);
+      menuLevel = boundedIndex(message.settings.level, menuLevel, WORLD_ZONES.length);
+      menuDifficulty = boundedIndex(message.settings.difficulty, menuDifficulty, DIFFICULTY_OPTIONS.length);
     }
     if (Array.isArray(message.roster)) updateRoster(message.roster);
     net.matchRoster = [...net.roster.values()].filter(row => row.connected).sort((a, b) => a.id - b.id);
@@ -9462,6 +9512,7 @@
   }
 
   function returnToOnlineLobby(notifyServer = true) {
+    onlineMenuOpen = false;
     if (notifyServer && isRoomOwner()) sendServer({ t: "lobby" });
     running = false;
     paused = false;
@@ -10279,6 +10330,7 @@
     time = 0;
     running = true;
     paused = false;
+    onlineMenuOpen = false;
     gameOver = false;
     levelState = "stage_intro";
     introVehicle = !continueState && startLevel === 0
@@ -10929,6 +10981,7 @@
 
   function finish(win) {
     if (gameOver) return;
+    onlineMenuOpen = false;
     endingScene = null;
     const player = localPlayer() || players[0];
     const score = players.reduce((sum, entry) => sum + entry.score, 0);
@@ -10995,7 +11048,11 @@
   function restartCurrentLevel() {
     if (!running) return;
     if (onlineSession()) {
-      if (isRoomOwner()) sendServer({ t: "restart" });
+      if (isRoomOwner()) {
+        onlineMenuOpen = false;
+        clearControls();
+        sendServer({ t: "restart" });
+      }
       else showBanner("ONLY THE ROOM OWNER CAN RESTART", 1.6);
       return;
     }
@@ -11009,6 +11066,7 @@
 
   function returnToMenu() {
     if (!running) return;
+    onlineMenuOpen = false;
     if (onlineSession()) {
       if (isRoomOwner()) returnToOnlineLobby(true);
       else leaveOnlineSession(true);
@@ -11038,7 +11096,15 @@
   function togglePause() {
     if (!running || endingScene) return;
     if (onlineSession()) {
-      showBanner("ONLINE MATCHES DO NOT PAUSE", 1.4);
+      onlineMenuOpen = !onlineMenuOpen;
+      clearControls();
+      if (onlineMenuOpen) publishNeutralNetworkInput();
+      audio.ui(onlineMenuOpen ? "pause" : "confirm");
+      canvas.style.cursor = !touchUi && !onlineMenuOpen ? "none" : "default";
+      if (onlineMenuOpen) {
+        bannerText = "";
+        bannerUntil = 0;
+      }
       return;
     }
     paused = !paused;
@@ -12338,7 +12404,7 @@
     ctx.fillStyle = UI_THEME.muted;
     ctx.font = `700 ${7 * scale}px ${UI_FONT}`;
     ctx.textAlign = "right";
-    ctx.fillText("v8.2.2 ONLINE", x + panelW - 8 * scale, y + panelH - 7 * scale);
+    ctx.fillText("v8.3.1 ONLINE", x + panelW - 8 * scale, y + panelH - 7 * scale);
   }
 
 
@@ -12561,7 +12627,7 @@
     ctx.fillStyle = UI_THEME.muted;
     ctx.font = `700 ${7 * scale}px ${UI_FONT}`;
     ctx.textAlign = "right";
-    ctx.fillText("v8.2.2 ONLINE", x + panelW - 8 * scale, y + panelH - 7 * scale);
+    ctx.fillText("v8.3.1 ONLINE", x + panelW - 8 * scale, y + panelH - 7 * scale);
   }
 
   function drawCharacterPreview(profile, cx, cy, scale, selected = false) {
@@ -12726,7 +12792,7 @@
     ctx.fillStyle = UI_THEME.muted;
     ctx.font = `700 ${7 * scale}px ${UI_FONT}`;
     ctx.textAlign = "right";
-    ctx.fillText("v8.2.2 ONLINE", x + panelW - 8 * scale, y + panelH - 7 * scale);
+    ctx.fillText("v8.3.1 ONLINE", x + panelW - 8 * scale, y + panelH - 7 * scale);
   }
 
   function drawCanvasMenu() {
@@ -12792,6 +12858,24 @@
       ctx.fillText(value, px + 7 * scale, metricY + 0.5 * scale);
     }
     return { w, h };
+  }
+
+  function drawOnlineMenuAccessButton() {
+    if (!onlineSession() || !running || onlineMenuOpen) return;
+    const scale = uiScaleFactor();
+    const pad = 7 * scale;
+    const topPad = pad + safeTop;
+    const utilitySize = (touchUi ? 29 : 27) * scale;
+    const utilityH = 27 * scale;
+    const utilityRight = screenW - safeRight - pad;
+    uiRects.pause = {
+      x: utilityRight - utilitySize,
+      y: topPad,
+      w: utilitySize,
+      h: utilityH
+    };
+    drawPixelPanel(uiRects.pause.x, uiRects.pause.y, uiRects.pause.w, uiRects.pause.h, UI_THEME.panel, UI_THEME.border, false);
+    drawUiIcon("pause", uiRects.pause.x + uiRects.pause.w / 2, uiRects.pause.y + uiRects.pause.h / 2, 11.5 * scale, UI_THEME.blue, 1.8 * scale);
   }
 
   function drawCanvasHud() {
@@ -12895,7 +12979,7 @@
   }
 
   function drawCanvasTouchControls() {
-    if (!touchUi || !running || paused || stageIntro || levelTransition || portalWarp) return;
+    if (!touchUi || !running || paused || onlineMenuOpen || stageIntro || levelTransition || portalWarp) return;
 
     uiRects.buttons = {};
     ctx.save();
@@ -12976,7 +13060,7 @@
   }
 
   function drawMouseCrosshair() {
-    if (touchUi || !running || paused || stageIntro || levelTransition || portalWarp || !mouseInput.active) return;
+    if (touchUi || !running || paused || onlineMenuOpen || stageIntro || levelTransition || portalWarp || !mouseInput.active) return;
     const player = localPlayer() || players[0];
     if (!player || player.dead || player.portalTransit) return;
 
@@ -13175,11 +13259,11 @@
     ctx.textBaseline = "middle";
     ctx.font = `900 ${18 * scale}px ${UI_FONT}`;
     ctx.fillStyle = UI_THEME.text;
-    ctx.fillText("PAUSED", screenW / 2 - 28 * scale, py + 34 * scale);
+    ctx.fillText(onlineMenuOpen ? "ONLINE MENU" : "PAUSED", screenW / 2 - 28 * scale, py + 34 * scale);
     ctx.textAlign = "center";
     ctx.fillStyle = UI_THEME.muted;
     ctx.font = `800 ${7.5 * scale}px ${UI_FONT}`;
-    ctx.fillText(`${(localPlayer() || players[0])?.profile.name || "OPERATIVE"} • ${(localPlayer() || players[0])?.profile.power || "POWER"}`, screenW / 2, py + 58 * scale);
+    ctx.fillText(onlineMenuOpen ? "THE MATCH CONTINUES WHILE THIS MENU IS OPEN" : `${(localPlayer() || players[0])?.profile.name || "OPERATIVE"} • ${(localPlayer() || players[0])?.profile.power || "POWER"}`, screenW / 2, py + 58 * scale);
 
     const gap = 8 * scale;
     const sidePad = 12 * scale;
@@ -13199,9 +13283,9 @@
     }
 
     const actions = [
-      [uiRects.pause, "play", "RESUME", UI_THEME.blueBright],
-      [uiRects.pauseRestart, "restart", "RESTART", UI_THEME.warning],
-      [uiRects.pauseMenu, "menu", "MENU", UI_THEME.muted]
+      [uiRects.pause, "play", onlineMenuOpen ? "CONTINUE" : "RESUME", UI_THEME.blueBright],
+      [uiRects.pauseRestart, "restart", onlineMenuOpen && !isRoomOwner() ? "HOST RESTART" : "RESTART", onlineMenuOpen && !isRoomOwner() ? UI_THEME.muted : UI_THEME.warning],
+      [uiRects.pauseMenu, "menu", onlineMenuOpen ? (isRoomOwner() ? "RETURN TO LOBBY" : "LEAVE MATCH") : "MENU", UI_THEME.muted]
     ];
     for (const [rect, icon, label, color] of actions) {
       drawPixelPanel(rect.x, rect.y, rect.w, rect.h, UI_THEME.panelActive, color, false);
@@ -13277,15 +13361,17 @@
     if (victoryScene) victoryScene.drawOverlay();
     if (levelTransition) {
       drawLevelTransitionOverlay();
+      drawOnlineMenuAccessButton();
     } else if (stageIntro) {
       drawStageIntroOverlay();
+      drawOnlineMenuAccessButton();
     } else {
       drawCanvasHud();
       drawCanvasTouchControls();
       drawMouseCrosshair();
     }
 
-    if (paused) drawPauseOverlay();
+    if (paused || onlineMenuOpen) drawPauseOverlay();
   }
 
   function inView(entity, padding = 120) {
@@ -13631,13 +13717,13 @@
 
   function updateMouseCursor(point = null) {
     if (touchUi) return;
-    if (running && !paused) {
+    if (running && !paused && !onlineMenuOpen) {
       canvas.style.cursor = "none";
       return;
     }
     let interactive = false;
     if (!running && levelState === "menu" && point) interactive = menuFocusAtPoint(point) !== null;
-    if (paused && point) {
+    if ((paused || onlineMenuOpen) && point) {
       interactive = uiRectContains(uiRects.pause, point.x, point.y) ||
         uiRectContains(uiRects.pauseRestart, point.x, point.y) ||
         uiRectContains(uiRects.pauseMenu, point.x, point.y);
@@ -13681,7 +13767,7 @@
       return;
     }
 
-    if (paused) {
+    if (paused || onlineMenuOpen) {
       if (uiRectContains(uiRects.pause, point.x, point.y)) togglePause();
       else if (uiRectContains(uiRects.pauseRestart, point.x, point.y)) restartCurrentLevel();
       else if (uiRectContains(uiRects.pauseMenu, point.x, point.y)) returnToMenu();
@@ -13742,7 +13828,7 @@
         updateMouseCursor(point);
         return;
       }
-      if (paused) {
+      if (paused || onlineMenuOpen) {
         updateMouseCursor(point);
         return;
       }
@@ -13806,6 +13892,10 @@
       } else if (menuScreen === "lobby") {
         if (event.code === "Escape" || event.code === "Backspace") leaveOnlineSession(true);
         else if (event.code === "KeyC") cycleLobbyCharacter(1);
+        else if (isRoomOwner() && (event.code === "ArrowLeft" || event.code === "KeyA")) { cycleMenuDifficulty(-1); sendLobbySettings(); }
+        else if (isRoomOwner() && (event.code === "ArrowRight" || event.code === "KeyD")) { cycleMenuDifficulty(1); sendLobbySettings(); }
+        else if (isRoomOwner() && (event.code === "ArrowUp" || event.code === "KeyW")) { cycleMenuLevel(-1); sendLobbySettings(); }
+        else if (isRoomOwner() && (event.code === "ArrowDown" || event.code === "KeyS")) { cycleMenuLevel(1); sendLobbySettings(); }
         else if ((event.code === "Enter" || event.code === "Space") && isRoomOwner() && onlineLobbyReady()) requestOnlineStart();
         else if ((event.code === "Enter" || event.code === "Space") && !isRoomOwner()) { const row = net.roster.get(net.localId); setLocalReady(!(row && row.ready)); }
       } else if (menuScreen === "character") {
@@ -13841,7 +13931,7 @@
       return;
     }
 
-    if (paused) {
+    if (paused || onlineMenuOpen) {
       if (!event.repeat && event.code === "KeyR") restartCurrentLevel();
       else if (!event.repeat && event.code === "KeyQ") returnToMenu();
       else if (!event.repeat && (event.code === "Escape" || event.code === "KeyP")) togglePause();
