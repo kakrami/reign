@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>Iron Reign: Urban Assault v8.2.2 Online</title>
+<title>Iron Reign: Urban Assault v8.3.0 Online</title>
 <style>
   :root {
     --safe-top: env(safe-area-inset-top, 0px);
@@ -43,7 +43,7 @@
 (() => {
   "use strict";
 
-  // IRON REIGN ONLINE v8.2.2 MULTIPLAYER CLIENT
+  // IRON REIGN ONLINE v8.3.0 SYSTEMS REBUILD
 
   const canvas = document.getElementById("game");
   const ctx = canvas.getContext("2d", { alpha: false });
@@ -852,6 +852,22 @@
     floatingTexts.push(new FloatingText(x, y, text, color, size));
   }
 
+  function cameraWorldBounds(viewWidth = visibleWorldW) {
+    const worldMaximum = Math.max(0, LEVEL_W - viewWidth);
+    if (bossArena && typeof bossArena.cameraBounds === "function") {
+      return bossArena.cameraBounds(viewWidth);
+    }
+    return { min: 0, max: worldMaximum };
+  }
+
+  function setCameraPosition(x, y) {
+    const bounds = cameraWorldBounds(visibleWorldW);
+    cameraX = clamp(Number.isFinite(x) ? x : cameraX, bounds.min, bounds.max);
+    cameraY = clampCameraY(Number.isFinite(y) ? y : cameraY);
+    cameraTargetX = cameraX;
+    cameraTargetY = cameraY;
+  }
+
   function resize() {
     const viewport = window.visualViewport;
     const vw = Math.max(1, Math.round(viewport ? viewport.width : innerWidth));
@@ -860,16 +876,20 @@
     const offsetY = Math.round(viewport ? viewport.offsetTop : 0);
     const nextPortrait = vh >= vw;
     const orientationChanged = previousResizePortrait !== null && previousResizePortrait !== nextPortrait;
-    const snapCameraForResize = orientationChanged;
+    const previousBaseWidth = Math.max(1, baseVisibleWorldW);
+    const previousViewWidth = Math.max(1, visibleWorldW);
+    const leadBeforeResize = running ? frontAlivePlayer() : null;
+    const playerScreenRatio = leadBeforeResize
+      ? clamp((leadBeforeResize.cx - cameraX) / previousViewWidth, 0.20, 0.55)
+      : 0.36;
+
     portrait = nextPortrait;
     previousResizePortrait = portrait;
-
-    // Use only integer backing scales. Fractional canvas scales can produce
-    // seams, clipped strokes, and intermittent compositing artifacts in iOS
-    // Safari. Phones render at a stable 2x Retina buffer; unusually large
-    // displays fall back to 1x before exceeding the safe backing-pixel budget.
     screenW = vw;
     screenH = vh;
+
+    // Keep the backing buffer stable and integer-scaled. Browser chrome changes
+    // can fire several visualViewport resizes without changing game geometry.
     const nativeDpr = Math.max(1, window.devicePixelRatio);
     const retinaPixels = vw * vh * 4;
     dpr = nativeDpr >= 2 && retinaPixels <= 4000000 ? 2 : 1;
@@ -893,39 +913,36 @@
 
     const aspect = vw / vh;
     baseVisibleWorldW = portrait ? 820 : (aspect > 2.4 ? 1620 : 1500);
-    const bossScale = bossArena ? bossArena.resizeScale() : 1;
-    visibleWorldW = baseVisibleWorldW * bossScale;
+
+    // View zoom is local presentation state. Arena world dimensions never depend
+    // on viewport orientation, and a browser resize must not recreate the arena.
+    const previousZoom = clamp(previousViewWidth / previousBaseWidth, 0.82, 1.35);
+    let nextZoom = previousZoom;
+    if (!running || levelState === "menu") nextZoom = 1;
+    if (bossArena) nextZoom = bossArena.targetViewWidth() / baseVisibleWorldW;
+    else if (victoryScene) nextZoom = 1.06;
+    visibleWorldW = clamp(baseVisibleWorldW * nextZoom, 620, LEVEL_W);
     viewScale = canvas.width / visibleWorldW;
     visibleWorldH = canvas.height / viewScale;
 
-    const maxCameraX = Math.max(0, LEVEL_W - visibleWorldW);
-    cameraX = clamp(cameraX, 0, maxCameraX);
-    cameraTargetX = clamp(cameraTargetX, 0, maxCameraX);
-
-    let focusY = terrainSurfaceY(cameraX + visibleWorldW * 0.36);
     const leadPlayer = running ? frontAlivePlayer() : null;
-    if (leadPlayer) focusY = terrainSurfaceY(leadPlayer.cx);
+    const focusX = leadPlayer ? leadPlayer.cx : cameraX + visibleWorldW * 0.36;
+    const focusY = terrainSurfaceY(focusX);
+    const baselineY = clampCameraY(focusY - visibleWorldH * cameraGroundAnchor());
+    const bounds = cameraWorldBounds(visibleWorldW);
 
-    const baselineY = clampCameraY(
-      focusY - visibleWorldH * cameraGroundAnchor()
-    );
-    cameraTargetY = baselineY;
-
-    // Orientation changes alter visibleWorldH immediately. Keep the terrain at the
-    // same screen anchor instead of easing from the old portrait camera height.
-    if (!running || levelState === "menu" || snapCameraForResize) {
-      cameraY = baselineY;
-      if (snapCameraForResize) accumulator = 0;
+    if (orientationChanged && leadPlayer) {
+      setCameraPosition(leadPlayer.cx - visibleWorldW * playerScreenRatio, baselineY);
+      accumulator = 0;
+    } else {
+      cameraX = clamp(cameraX, bounds.min, bounds.max);
+      cameraTargetX = clamp(cameraTargetX, bounds.min, bounds.max);
+      cameraTargetY = baselineY;
+      if (!running || levelState === "menu") cameraY = baselineY;
     }
   }
 
   function updateWorldView(dt) {
-    const previousWidth = visibleWorldW;
-    const anchorPlayer = running ? frontAlivePlayer() : null;
-    const anchorRatio = anchorPlayer && previousWidth > 0
-      ? clamp((anchorPlayer.cx - cameraX) / previousWidth, 0.18, 0.52)
-      : 0.34;
-
     let targetWidth = baseVisibleWorldW;
     if (bossArena) targetWidth = bossArena.targetViewWidth();
     else if (victoryScene) targetWidth = baseVisibleWorldW * 1.06;
@@ -934,14 +951,16 @@
     const blend = 1 - Math.exp(-response * dt);
     visibleWorldW += (targetWidth - visibleWorldW) * blend;
     if (Math.abs(targetWidth - visibleWorldW) < 0.05) visibleWorldW = targetWidth;
-
-    if (!bossArena && anchorPlayer && Math.abs(visibleWorldW - previousWidth) > 0.001) {
-      const maxCameraX = Math.max(0, LEVEL_W - visibleWorldW);
-      cameraX = clamp(anchorPlayer.cx - anchorRatio * visibleWorldW, 0, maxCameraX);
-    }
+    visibleWorldW = clamp(visibleWorldW, 620, LEVEL_W);
 
     viewScale = canvas.width / visibleWorldW;
     visibleWorldH = canvas.height / viewScale;
+
+    // View-size changes and camera movement are separate phases. This function
+    // only updates projection; updateCamera is the sole per-frame camera writer.
+    const bounds = cameraWorldBounds(visibleWorldW);
+    cameraX = clamp(cameraX, bounds.min, bounds.max);
+    cameraTargetX = clamp(cameraTargetX, bounds.min, bounds.max);
   }
 
   addEventListener("resize", resize, { passive: true });
@@ -2166,12 +2185,8 @@
       this.invuln = 2.5;
       this.entryTimer = Math.max(this.entryTimer, 0.35);
 
-      const maxCameraX = Math.max(0, LEVEL_W - visibleWorldW);
-      cameraX = clamp(safeX - visibleWorldW * 0.28, 0, maxCameraX);
-      cameraTargetX = cameraX;
       const groundY = terrainGroundY(safeX + this.w * 0.5);
-      cameraY = clampCameraY(groundY - visibleWorldH * cameraGroundAnchor());
-      cameraTargetY = cameraY;
+      setCameraPosition(safeX - visibleWorldW * 0.28, groundY - visibleWorldH * cameraGroundAnchor());
 
       enemyBullets = enemyBullets.filter(bullet => Math.hypot(bullet.cx - this.cx, bullet.cy - this.cy) > 520);
       debris = debris.filter(piece => Math.hypot(piece.cx - this.cx, piece.cy - this.cy) > 420);
@@ -4285,30 +4300,46 @@
     echoes: "summon"
   });
 
-  // Central range roles keep every boss using the same deterministic selection
-  // rule. Near attacks are skipped when the player is far away, and far attacks
-  // are skipped when the player is already beside the boss. Unlisted attacks are
-  // flexible and remain valid at any distance.
-  const BOSS_ATTACK_RANGES = Object.freeze({
-    stomp: "near",
-    crush: "near",
-    phaseDash: "near",
-    rain: "far",
-    debris: "far",
-    cross: "far",
-    laser: "far",
-    summon: "far",
-    missiles: "far",
-    gravity: "far",
-    roots: "far",
-    mortar: "far",
-    bombRun: "far",
-    deploy: "far",
-    rootWall: "far",
-    avalanche: "far",
-    gearWall: "far",
-    echoes: "far"
+  // One data-driven attack policy replaces the old range filter plus the
+  // separate arena anti-air override. Selection now considers distance and
+  // elevation once, then chooses the best attack from the boss rotation.
+  const BOSS_ATTACK_ROLE_OVERRIDES = Object.freeze({
+    stomp: "close",
+    crush: "close",
+    ram: "pursuit",
+    swoop: "pursuit",
+    burrow: "pursuit",
+    devour: "pursuit",
+    iceCharge: "pursuit",
+    phaseDash: "pursuit",
+    roots: "ranged",
+    rootWall: "ranged",
+    iceField: "ranged"
   });
+
+  const BOSS_CUE_ROLES = Object.freeze({
+    line: "ranged",
+    sky: "ranged",
+    sweep: "ranged",
+    lock: "ranged",
+    cross: "ranged",
+    gravity: "ranged",
+    summon: "ranged",
+    charge: "pursuit",
+    path: "pursuit",
+    ground: "mid",
+    cone: "mid",
+    radial: "mid"
+  });
+
+  const BOSS_GROUND_ONLY_ATTACKS = new Set([
+    "stomp", "crush", "ram", "burrow", "devour", "iceCharge", "phaseDash"
+  ]);
+
+  function bossAttackRole(name) {
+    if (BOSS_ATTACK_ROLE_OVERRIDES[name]) return BOSS_ATTACK_ROLE_OVERRIDES[name];
+    return BOSS_CUE_ROLES[BOSS_TELEGRAPH_CUES[name]] || "mid";
+  }
 
   function drawBossTelegraph(boss) {
     if (boss.telegraphTimer <= 0 || !boss.telegraphCue) return;
@@ -4516,6 +4547,8 @@
       this.telegraphTargetX = null;
       this.telegraphTargetY = null;
       this.pendingAttack = null;
+      this.pendingAttackName = null;
+      this.pendingAttackCombo = false;
       this.flashTimer = 0;
       this.attackMode = 0;
       this.combatTier = 0;
@@ -4557,28 +4590,76 @@
       return 0;
     }
 
-    attackFitsTargetRange(name, target = this.target()) {
-      const role = BOSS_ATTACK_RANGES[name] || "any";
+    targetRangeBand(target = this.target()) {
       const gap = this.targetGap(target);
-      if (role === "near") return gap < 500;
-      if (role === "far") return gap > 250;
-      return true;
+      const arenaSpan = Math.max(900, this.arenaRight - this.arenaLeft);
+      const closeLimit = clamp(this.w * 1.15 + 180, 320, 520);
+      const farLimit = clamp(arenaSpan * 0.40, 650, 900);
+      if (gap <= closeLimit) return "close";
+      if (gap >= farLimit) return "ranged";
+      return "mid";
+    }
+
+    targetIsElevated(target = this.target()) {
+      if (!target) return false;
+      const ground = terrainSurfaceY(target.cx);
+      return Boolean(target.supportPlatform && target.supportPlatform.arenaOwned) ||
+        (Number.isFinite(ground) && target.y + target.h < ground - 72);
+    }
+
+    attackSuitability(name, target = this.target()) {
+      const role = bossAttackRole(name);
+      if (role === "pursuit") return this.targetIsElevated(target) && BOSS_GROUND_ONLY_ATTACKS.has(name) ? 3 : 0;
+      const order = { close: 0, mid: 1, ranged: 2 };
+      const targetBand = this.targetRangeBand(target);
+      let score = Math.abs((order[role] ?? 1) - (order[targetBand] ?? 1));
+      if (role === "close" && targetBand === "ranged") score += 3;
+      if (role === "ranged" && targetBand === "close") score += 1;
+      if (this.targetIsElevated(target) && BOSS_GROUND_ONLY_ATTACKS.has(name)) score += 4;
+      return score;
+    }
+
+    attackFitsTargetRange(name, target = this.target()) {
+      return this.attackSuitability(name, target) <= 1;
     }
 
     selectAttackForTarget(scheduledAttack, attackIndex, previousName = null, skipSummon = false) {
       const attacks = this.profile.attacks || [];
       if (!attacks.length) return scheduledAttack;
       const target = this.target();
-      const allowed = name =>
-        name !== previousName &&
-        (!skipSummon || name !== "summon") &&
-        this.attackFitsTargetRange(name, target);
-      if (allowed(scheduledAttack)) return scheduledAttack;
-      for (let offset = 1; offset <= attacks.length; offset++) {
+      let bestName = scheduledAttack;
+      let bestScore = Infinity;
+
+      for (let offset = 0; offset < attacks.length; offset++) {
         const candidate = attacks[(attackIndex + offset) % attacks.length];
-        if (allowed(candidate)) return candidate;
+        if (skipSummon && candidate === "summon") continue;
+        if (candidate === previousName && attacks.length > 1) continue;
+        const score = this.attackSuitability(candidate, target);
+        if (score < bestScore) {
+          bestName = candidate;
+          bestScore = score;
+          if (score === 0 && offset === 0) break;
+        }
       }
-      return scheduledAttack;
+      return bestName;
+    }
+
+    updatePassiveState(dt, faceTarget = true) {
+      this.phase += dt;
+      this.cameraBlend = bossArena && bossArena.boss === this ? bossArena.cameraBlend : 0;
+      this.flashTimer = Math.max(0, this.flashTimer - dt);
+      this.phaseShield = Math.max(0, this.phaseShield - dt);
+      this.vulnerableTimer = Math.max(0, this.vulnerableTimer - dt);
+      this.armorPulse = Math.max(0, this.armorPulse - dt);
+      const target = this.target();
+      if (target && faceTarget) this.faceTarget(target);
+      return target;
+    }
+
+    updateCombatTier() {
+      const healthRatio = clamp(this.health / Math.max(1, this.maxHealth), 0, 1);
+      const nextTier = healthRatio <= 0.34 ? 2 : healthRatio <= 0.68 ? 1 : 0;
+      if (nextTier > this.combatTier) this.enterCombatTier(nextTier);
     }
 
     displayFacing() {
@@ -4590,22 +4671,12 @@
     }
 
     update(dt) {
-      this.phase += dt;
-      this.cameraBlend = bossArena && bossArena.boss === this ? bossArena.cameraBlend : 0;
-      this.flashTimer = Math.max(0, this.flashTimer - dt);
-      this.phaseShield = Math.max(0, this.phaseShield - dt);
-      this.vulnerableTimer = Math.max(0, this.vulnerableTimer - dt);
-      this.armorPulse = Math.max(0, this.armorPulse - dt);
-      const target = this.target();
-      if (target) this.faceTarget(target);
+      const target = this.updatePassiveState(dt, true);
       if (this.introTimer > 0) { this.introTimer -= dt; return; }
       if (bossArena && bossArena.boss === this && !bossArena.combatReady) return;
       if (!target) return;
       if (specialAttack) { this.attackTimer = Math.max(this.attackTimer, 0.45); return; }
-
-      const healthRatio = clamp(this.health / Math.max(1, this.maxHealth), 0, 1);
-      const nextTier = healthRatio <= 0.34 ? 2 : healthRatio <= 0.68 ? 1 : 0;
-      if (nextTier > this.combatTier) this.enterCombatTier(nextTier);
+      this.updateCombatTier();
 
       const formFloat = {
         gunship: [34, 1.85], carrier: [28, 1.5], mantis: [38, 1.8],
@@ -4616,11 +4687,9 @@
 
       if (this.telegraphTimer > 0) {
         this.telegraphTimer -= dt;
-        if (this.telegraphTimer <= 0 && this.pendingAttack) {
+        if (this.telegraphTimer <= 0 && this.pendingAttackName) {
           this.telegraphTimer = 0;
-          const attack = this.pendingAttack;
-          this.pendingAttack = null;
-          attack(target);
+          this.executePendingBossAttack();
         }
         return;
       }
@@ -4641,10 +4710,7 @@
           this.attackTimer = menuDifficulty <= 1 ? 0.34 : 0.22;
         } else {
           const scheduledAttack = this.profile.attacks[this.attackMode % this.profile.attacks.length];
-          const rangedAttack = this.selectAttackForTarget(scheduledAttack, this.attackMode);
-          const attackName = bossArena && bossArena.boss === this
-            ? bossArena.selectBossAttack(rangedAttack, this.attackMode)
-            : rangedAttack;
+          const attackName = this.selectAttackForTarget(scheduledAttack, this.attackMode);
           this.attackMode++;
           this.beginBossAttack(attackName, false);
           const baseCadence = this.profile.cadence || (2.92 - Math.min(0.58, campaignLevel * 0.11));
@@ -4673,6 +4739,8 @@
       this.comboTimer = 0;
       this.comboAttackName = null;
       this.pendingAttack = null;
+      this.pendingAttackName = null;
+      this.pendingAttackCombo = false;
       this.telegraphTimer = 0;
       this.clearTelegraph();
       if (difficulty.phaseClear) {
@@ -4734,27 +4802,46 @@
     beginBossAttack(name, combo = false) {
       const entry = this.attackDefinition(name);
       const duration = entry[1] * difficulty.telegraph * (combo ? 0.78 : 1);
+      this.pendingAttack = null;
+      this.pendingAttackName = name;
+      this.pendingAttackCombo = combo;
       this.prepareTelegraph(name, duration);
-      this.telegraph(() => {
-        entry[0]();
-        this.vulnerableTimer = Math.max(this.vulnerableTimer, combo ? 0.58 : 1.02 + this.combatTier * 0.10);
-        if (bossArena && bossArena.boss === this) bossArena.onAttackCommitted();
-        if (!combo && this.combatTier > 0 && !this.retreating && difficulty.bossComboMode > 0) {
-          const tierAllowed = difficulty.bossComboMode > 1 || this.combatTier >= 2;
-          const comboEvery = difficulty.bossComboMode >= 3
+      this.telegraphTimer = duration;
+      const cuePitch = this.telegraphCue === "gravity" ? 74 : this.telegraphCue === "sky" ? 290 : 210 + campaignLevel * 42;
+      audio.tone(cuePitch, Math.min(0.48, duration * 0.55), "sawtooth", 0.08, this.telegraphCue === "gravity" ? -18 : 120);
+    }
+
+    executePendingBossAttack() {
+      const name = this.pendingAttackName;
+      const combo = Boolean(this.pendingAttackCombo);
+      this.pendingAttackName = null;
+      this.pendingAttackCombo = false;
+      if (!name) {
+        this.clearTelegraph();
+        return;
+      }
+
+      const entry = this.attackDefinition(name);
+      entry[0]();
+      this.clearTelegraph();
+      this.vulnerableTimer = Math.max(this.vulnerableTimer, combo ? 0.58 : 1.02 + this.combatTier * 0.10);
+      if (bossArena && bossArena.boss === this) bossArena.onAttackCommitted();
+
+      if (!combo && this.combatTier > 0 && !this.retreating && difficulty.bossComboMode > 0) {
+        const tierAllowed = difficulty.bossComboMode > 1 || this.combatTier >= 2;
+        const comboEvery = difficulty.bossComboMode >= 3
+          ? (this.combatTier >= 2 ? 2 : 3)
+          : difficulty.bossComboMode === 2
             ? (this.combatTier >= 2 ? 2 : 3)
-            : difficulty.bossComboMode === 2
-              ? (this.combatTier >= 2 ? 2 : 3)
-              : 3;
-          if (tierAllowed && this.attackMode % comboEvery === 0) {
-            const followUp = this.selectComboAttack(name);
-            if (followUp) {
-              this.comboAttackName = followUp;
-              this.comboTimer = difficulty.bossComboMode >= 2 ? 0.28 : 0.42;
-            }
+            : 3;
+        if (tierAllowed && this.attackMode % comboEvery === 0) {
+          const followUp = this.selectComboAttack(name);
+          if (followUp) {
+            this.comboAttackName = followUp;
+            this.comboTimer = difficulty.bossComboMode >= 2 ? 0.28 : 0.42;
           }
         }
-      }, duration);
+      }
     }
 
     prepareTelegraph(name, duration) {
@@ -4796,16 +4883,6 @@
       this.telegraphTargetX = null;
       this.telegraphTargetY = null;
       this.telegraphDuration = 0;
-    }
-
-    telegraph(attack, duration) {
-      this.pendingAttack = () => {
-        attack();
-        this.clearTelegraph();
-      };
-      this.telegraphTimer = duration;
-      const cuePitch = this.telegraphCue === "gravity" ? 74 : this.telegraphCue === "sky" ? 290 : 210 + campaignLevel * 42;
-      audio.tone(cuePitch, Math.min(0.48, duration * 0.55), "sawtooth", 0.08, this.telegraphCue === "gravity" ? -18 : 120);
     }
 
     horizontalBurst() {
@@ -5113,15 +5190,7 @@
     }
 
     updateActionBase(dt) {
-      this.phase += dt;
-      this.cameraBlend = bossArena && bossArena.boss === this ? bossArena.cameraBlend : 0;
-      this.flashTimer = Math.max(0, this.flashTimer - dt);
-      this.phaseShield = Math.max(0, this.phaseShield - dt);
-      const target = this.target();
-      if (target && (!this.tankAction || this.tankAction.type !== "ram")) this.faceTarget(target);
-      const healthRatio = clamp(this.health / Math.max(1, this.maxHealth), 0, 1);
-      const nextTier = healthRatio <= 0.34 ? 2 : healthRatio <= 0.68 ? 1 : 0;
-      if (nextTier > this.combatTier) this.enterCombatTier(nextTier);
+      this.updatePassiveState(dt, !this.tankAction || this.tankAction.type !== "ram");
     }
 
     startRam() {
@@ -5465,8 +5534,7 @@
     }
 
     updateFlightAction(dt) {
-      this.phase += dt;
-      this.flashTimer = Math.max(0, this.flashTimer - dt);
+      this.updatePassiveState(dt, false);
       this.contactTimer = Math.max(0, this.contactTimer - dt);
       const action = this.flightAction;
       action.time += dt;
@@ -5643,8 +5711,7 @@
     }
 
     updateBeastAction(dt) {
-      this.phase += dt;
-      this.flashTimer = Math.max(0, this.flashTimer - dt);
+      this.updatePassiveState(dt, false);
       this.contactTimer = Math.max(0, this.contactTimer - dt);
       const action = this.beastAction;
 
@@ -5822,8 +5889,7 @@
     }
 
     updateIceAction(dt) {
-      this.phase += dt;
-      this.flashTimer = Math.max(0, this.flashTimer - dt);
+      this.updatePassiveState(dt, false);
       this.contactTimer = Math.max(0, this.contactTimer - dt);
       const action = this.iceAction;
       action.speed = Math.min(550 + this.combatTier * 60, action.speed + (840 + this.combatTier * 115) * dt);
@@ -5936,10 +6002,7 @@
     }
 
     updateEmperorAction(dt) {
-      this.phase += dt;
-      this.cameraBlend = bossArena && bossArena.boss === this ? bossArena.cameraBlend : 0;
-      this.flashTimer = Math.max(0, this.flashTimer - dt);
-      this.phaseShield = Math.max(0, this.phaseShield - dt);
+      this.updatePassiveState(dt, false);
       this.slashTimer = Math.max(0, this.slashTimer - dt);
       const action = this.emperorAction;
       action.timer -= dt;
@@ -6140,6 +6203,8 @@
       this.retreatTimer = 1.15;
       this.hudHidden = true;
       this.pendingAttack = null;
+      this.pendingAttackName = null;
+      this.pendingAttackCombo = false;
       this.telegraphTimer = 0;
       this.clearTelegraph();
       this.comboTimer = 0;
@@ -8365,12 +8430,12 @@
 
       const zone = WORLD_ZONES[clamp(zoneIndexAt(boss.cx), 0, WORLD_ZONES.length - 1)];
       const interval = solidArenaInterval(zone, boss.cx);
-      const sizeFactor = portrait ? this.layout.sizeTall : this.layout.sizeWide;
-      const minimumWidth = portrait ? 1120 : 1460;
-      const maximumWidth = this.major
-        ? (portrait ? 1580 : 2180)
-        : (portrait ? 1420 : 1980);
-      const desiredWidth = clamp(baseVisibleWorldW * sizeFactor, minimumWidth, maximumWidth);
+      // Arena geometry is authoritative world state and must be identical on
+      // every device. Portrait/landscape only changes the local camera view.
+      const sizeFactor = this.layout.sizeWide;
+      const minimumWidth = 1460;
+      const maximumWidth = this.major ? 2180 : 1980;
+      const desiredWidth = clamp(1500 * sizeFactor, minimumWidth, maximumWidth);
       const availableWidth = Math.max(980, interval.end - interval.start);
       this.width = Math.min(desiredWidth, availableWidth);
 
@@ -8411,9 +8476,15 @@
       this.createArenaObjects();
     }
 
-    resizeScale() {
-      const factor = portrait ? this.layout.viewTall : this.layout.viewWide;
-      return mix(1, factor, this.cameraBlend || 1);
+    cameraBounds(viewWidth) {
+      const worldMaximum = Math.max(0, LEVEL_W - viewWidth);
+      if (viewWidth >= this.width) {
+        const centered = clamp(this.center - viewWidth * 0.5, 0, worldMaximum);
+        return { min: centered, max: centered };
+      }
+      const minimum = clamp(this.left - 36, 0, worldMaximum);
+      const maximum = clamp(this.right - viewWidth + 36, minimum, worldMaximum);
+      return { min: minimum, max: maximum };
     }
 
     targetViewWidth() {
@@ -8441,10 +8512,8 @@
       } else if (player) {
         focus = player.cx + viewWidth * 0.10;
       }
-      const minCamera = this.left - Math.max(0, (viewWidth - this.width) * 0.5);
-      const maxCamera = this.right - viewWidth + Math.max(0, (viewWidth - this.width) * 0.5);
-      if (maxCamera < minCamera) return this.center - viewWidth * 0.5;
-      return clamp(focus - viewWidth * 0.5, minCamera, maxCamera);
+      const bounds = this.cameraBounds(viewWidth);
+      return clamp(focus - viewWidth * 0.5, bounds.min, bounds.max);
     }
 
     cameraTargetY(viewHeight, fallback) {
@@ -8480,36 +8549,6 @@
         const ground = terrainSurfaceY(x);
         if (Number.isFinite(ground)) this.covers.push(new ArenaCover(x, ground, this.boss.profile.accent, 0.45 + i * 0.16));
       }
-    }
-
-    selectBossAttack(scheduledAttack, attackIndex) {
-      const player = frontAlivePlayer();
-      if (!player || !this.boss || this.state !== "fight") return scheduledAttack;
-      const ground = terrainSurfaceY(player.cx);
-      const elevated = Boolean(player.supportPlatform && player.supportPlatform.arenaOwned) ||
-        (Number.isFinite(ground) && player.y + player.h < ground - 72);
-      if (!elevated) return scheduledAttack;
-
-      const antiAir = {
-        walker: ["rain", "fan"],
-        tank: ["mortar", "missiles", "laser"],
-        gunship: ["bombRun", "missiles", "swoop"],
-        carrier: ["bombRun", "missiles", "swoop"],
-        rail: ["laser", "cross", "summon"],
-        mantis: ["fan", "missiles", "summon"],
-        core: ["gravity", "nova", "spiral"],
-        hydra: ["rain", "fan", "roots"],
-        beast: ["rootWall", "summon", "devour"],
-        titan: ["avalanche", "laser", "iceField"],
-        emperor: ["missiles", "nova", "gearWall"],
-        hunter: ["debris", "missiles", "fan"]
-      }[this.boss.profile.form] || [];
-      const available = antiAir.filter(name =>
-        this.boss.profile.attacks.includes(name) &&
-        this.boss.attackFitsTargetRange(name, player)
-      );
-      if (!available.length) return scheduledAttack;
-      return available[attackIndex % available.length];
     }
 
     onAttackCommitted() {
@@ -8884,22 +8923,48 @@
     }
   }
 
-  function packNetworkValue(value) {
+  function packNetworkValue(value, depth = 0, seen = new WeakSet()) {
     if (typeof value === "number") {
       if (Number.isFinite(value)) return Math.round(value * 1000) / 1000;
       return value > 0 ? "__INF__" : "__NINF__";
     }
     if (typeof value === "string" || typeof value === "boolean" || value === null) return value;
-    if (Array.isArray(value) && value.length <= 32 && value.every(item => ["number", "string", "boolean"].includes(typeof item))) {
-      return value.map(packNetworkValue);
+    if (depth >= 5 || typeof value !== "object") return undefined;
+    if (seen.has(value)) return undefined;
+    seen.add(value);
+
+    if (Array.isArray(value)) {
+      if (value.length > 64) return undefined;
+      const packed = [];
+      for (const item of value) {
+        const row = packNetworkValue(item, depth + 1, seen);
+        if (row !== undefined) packed.push(row);
+      }
+      return packed;
     }
-    return undefined;
+
+    const prototype = Object.getPrototypeOf(value);
+    const constructorName = prototype && prototype.constructor ? prototype.constructor.name : "Object";
+    if (constructorName !== "Object") return undefined;
+    const entries = Object.entries(value);
+    if (entries.length > 40) return undefined;
+    const packed = {};
+    for (const [key, item] of entries) {
+      const row = packNetworkValue(item, depth + 1, seen);
+      if (row !== undefined) packed[key] = row;
+    }
+    return packed;
   }
 
   function unpackNetworkValue(value) {
     if (value === "__INF__") return Infinity;
     if (value === "__NINF__") return -Infinity;
     if (Array.isArray(value)) return value.map(unpackNetworkValue);
+    if (value && typeof value === "object") {
+      const restored = {};
+      for (const [key, item] of Object.entries(value)) restored[key] = unpackNetworkValue(item);
+      return restored;
+    }
     return value;
   }
 
@@ -8907,7 +8972,7 @@
     if (!object) return null;
     const row = { __type: object.constructor && object.constructor.name ? object.constructor.name : "Entity" };
     for (const [key, value] of Object.entries(object)) {
-      if (["profile", "supportPlatform", "dropPlatform", "target", "pendingAttack", "comboAttackName", "tankAction"].includes(key)) continue;
+      if (["profile", "supportPlatform", "dropPlatform", "target", "pendingAttack"].includes(key)) continue;
       const packed = packNetworkValue(value);
       if (packed !== undefined) row[key] = packed;
     }
@@ -8955,6 +9020,70 @@
     return packedRows.map(row => restoreNetworkObject(row, byId.get(row.netId))).filter(Boolean);
   }
 
+  function packBossArenaState() {
+    if (!bossArena || !activeBoss) return null;
+    return {
+      bossNetId: activeBoss.netId,
+      state: bossArena.state,
+      elapsed: bossArena.elapsed,
+      left: bossArena.left,
+      right: bossArena.right,
+      width: bossArena.width,
+      center: bossArena.center,
+      entryX: bossArena.entryX,
+      bossHomeX: bossArena.bossHomeX,
+      cameraBlend: bossArena.cameraBlend,
+      gateBlend: bossArena.gateBlend,
+      combatReady: bossArena.combatReady,
+      phaseRecovery: bossArena.phaseRecovery,
+      phasePulse: bossArena.phasePulse,
+      campTime: bossArena.campTime,
+      attackCommitPulse: bossArena.attackCommitPulse,
+      platforms: bossArena.platforms.map(platform => ({
+        y: platform.y, targetY: platform.targetY, delay: platform.delay,
+        deployTime: platform.deployTime, retractTime: platform.retractTime,
+        retracting: platform.retracting, collidable: platform.collidable,
+        visualAlpha: platform.visualAlpha, cycleState: platform.cycleState,
+        cycleTimer: platform.cycleTimer, cycleDuration: platform.cycleDuration
+      })),
+      covers: bossArena.covers.map(cover => ({
+        delay: cover.delay, disabled: cover.disabled, energy: cover.energy,
+        pulse: cover.pulse, alpha: cover.alpha, retracting: cover.retracting
+      }))
+    };
+  }
+
+  function applyBossArenaState(state, bossRow = null) {
+    if (!state || !activeBoss) {
+      if (!activeBoss) clearBossArena();
+      return;
+    }
+    if (!bossArena || bossArena.boss !== activeBoss) {
+      clearBossArena();
+      bossArena = new BossArena(activeBoss);
+      if (bossRow) restoreNetworkObject(bossRow, activeBoss);
+    }
+    bossArena.boss = activeBoss;
+    for (const key of ["state", "elapsed", "left", "right", "width", "center", "entryX", "bossHomeX", "cameraBlend", "gateBlend", "combatReady", "phaseRecovery", "phasePulse", "campTime", "attackCommitPulse"]) {
+      if (state[key] !== undefined) bossArena[key] = state[key];
+    }
+    activeBoss.arenaLeft = bossArena.left;
+    activeBoss.arenaRight = bossArena.right;
+    if ("homeX" in activeBoss) activeBoss.homeX = bossArena.bossHomeX;
+    if (Array.isArray(state.platforms)) {
+      state.platforms.forEach((row, index) => {
+        const platform = bossArena.platforms[index];
+        if (platform) Object.assign(platform, row);
+      });
+    }
+    if (Array.isArray(state.covers)) {
+      state.covers.forEach((row, index) => {
+        const cover = bossArena.covers[index];
+        if (cover) Object.assign(cover, row);
+      });
+    }
+  }
+
   function makeNetworkSnapshot() {
     return {
       t: "state",
@@ -8977,8 +9106,7 @@
       debris: debris.map(packNetworkObject),
       hazards: hazards.map(packNetworkObject),
       activeBoss: packNetworkObject(activeBoss),
-      cameraX,
-      cameraY
+      bossArena: packBossArenaState()
     };
   }
 
@@ -9013,8 +9141,7 @@
     } else if (activeBoss && activeBoss.dead) {
       activeBoss = null;
     }
-    if (Number.isFinite(snapshot.cameraX) && Math.abs(snapshot.cameraX - cameraX) > visibleWorldW * 0.25) cameraX = snapshot.cameraX;
-    if (Number.isFinite(snapshot.cameraY) && Math.abs(snapshot.cameraY - cameraY) > visibleWorldH * 0.25) cameraY = snapshot.cameraY;
+    applyBossArenaState(snapshot.bossArena, snapshot.activeBoss || null);
   }
 
   function updateNetwork(dt) {
@@ -10093,12 +10220,8 @@
   }
 
   function setOpeningCamera(focusX) {
-    const maxCameraX = Math.max(0, LEVEL_W - visibleWorldW);
-    cameraX = clamp(focusX - visibleWorldW * 0.27, 0, maxCameraX);
-    cameraTargetX = cameraX;
-    const focusY = terrainSurfaceY(focusX);
-    cameraY = clampCameraY(focusY - visibleWorldH * cameraGroundAnchor());
-    cameraTargetY = cameraY;
+    const focusY = terrainSurfaceY(focusX) - visibleWorldH * cameraGroundAnchor();
+    setCameraPosition(focusX - visibleWorldW * 0.27, focusY);
   }
 
   function begin(continueState = null) {
@@ -10151,10 +10274,7 @@
     checkpointX = continueState ? startX : (startLevel === 0 ? 1512.5 : startX);
     hitStop = 0;
     screenShake = 0;
-    cameraX = 0;
-    cameraY = 0;
-    cameraTargetX = 0;
-    cameraTargetY = 0;
+    setCameraPosition(0, 0);
     cameraHoldX = null;
     time = 0;
     running = true;
@@ -10245,7 +10365,6 @@
 
     introVehicle = null;
     checkpointX = Math.round(landingX);
-    cameraTargetX = Math.max(cameraTargetX, landingX - visibleWorldW * 0.34);
   }
 
   function enterCampaignLevel(index) {
@@ -10700,36 +10819,36 @@
   }
 
   function updateCamera(dt) {
-    const maxCameraX = Math.max(0, LEVEL_W - visibleWorldW);
-    let desiredX = cameraX;
+    const bounds = cameraWorldBounds(visibleWorldW);
+    let desiredX;
 
     if (stageIntro && stageIntro.sequence) {
       desiredX = stageIntro.targetX - visibleWorldW * (portrait ? 0.42 : 0.36);
     } else if (victoryScene) {
-      desiredX = victoryScene.x + victoryScene.w / 2 - visibleWorldW * 0.5;
+      desiredX = victoryScene.x + victoryScene.w * 0.5 - visibleWorldW * 0.5;
+    } else if (bossArena) {
+      desiredX = bossArena.cameraTargetX(visibleWorldW);
     } else if (levelState === "vehicle" && introVehicle) {
       desiredX = introVehicle.x - visibleWorldW * 0.28;
     } else if (levelState === "crash") {
       desiredX = cameraHoldX ?? cameraX;
     } else {
       const lead = leadingPlayerX(true);
-      if (lead > 0) desiredX = Math.max(cameraTargetX, lead - visibleWorldW * 0.34);
+      desiredX = lead > 0 ? lead - visibleWorldW * 0.34 : cameraX;
     }
 
-    let cameraRightLimit = maxCameraX;
-    if (bossArena) {
-      desiredX = bossArena.cameraTargetX(visibleWorldW);
-      cameraRightLimit = Math.min(maxCameraX, Math.max(0, bossArena.right - visibleWorldW + 36));
-    }
-
-    cameraTargetX = clamp(desiredX, 0, cameraRightLimit);
-    const horizontalResponse = bossArena ? (bossArena.state === "intro" ? 4.0 : 6.0) : levelState === "crash" ? 5.0 : levelState === "vehicle" ? 6.5 : 7.5;
+    cameraTargetX = clamp(desiredX, bounds.min, bounds.max);
+    const horizontalResponse = bossArena
+      ? (bossArena.state === "intro" ? 4.0 : 6.0)
+      : levelState === "crash" ? 5.0
+      : levelState === "vehicle" ? 6.5
+      : 7.5;
     const horizontalBlend = 1 - Math.exp(-horizontalResponse * dt);
     const requestedStep = (cameraTargetX - cameraX) * horizontalBlend;
-    const maxCameraSpeed = levelState === "vehicle" ? 240 : 360;
+    const maxCameraSpeed = levelState === "vehicle" ? 240 : bossArena ? 430 : 360;
     cameraX += clamp(requestedStep, -maxCameraSpeed * dt, maxCameraSpeed * dt);
     if (Math.abs(cameraTargetX - cameraX) < 0.02) cameraX = cameraTargetX;
-    cameraX = clamp(cameraX, 0, cameraRightLimit);
+    cameraX = clamp(cameraX, bounds.min, bounds.max);
 
     const leadPlayer = frontAlivePlayer();
     const introFocus = stageIntro && stageIntro.sequence ? stageIntro.targetX : null;
@@ -10738,17 +10857,18 @@
     let desiredY = terrainY - visibleWorldH * cameraGroundAnchor();
 
     if (leadPlayer && introFocus == null) {
-      const topSafeLine = cameraY + visibleWorldH * (portrait ? 0.38 : 0.35);
-      const bottomSafeLine = cameraY + visibleWorldH * (portrait ? 0.72 : 0.70);
+      const topRatio = portrait ? 0.38 : 0.35;
+      const bottomRatio = portrait ? 0.72 : 0.70;
+      const topSafeLine = cameraY + visibleWorldH * topRatio;
+      const bottomSafeLine = cameraY + visibleWorldH * bottomRatio;
       const playerTop = leadPlayer.y;
       const playerBottom = leadPlayer.y + leadPlayer.h;
 
       if (playerTop < topSafeLine) {
-        desiredY = Math.min(desiredY, playerTop - visibleWorldH * (portrait ? 0.38 : 0.35));
+        desiredY = Math.min(desiredY, playerTop - visibleWorldH * topRatio);
       } else if (!leadPlayer.onGround && leadPlayer.vy > 80 && playerBottom > bottomSafeLine) {
-        desiredY = Math.max(desiredY, playerBottom - visibleWorldH * (portrait ? 0.72 : 0.70));
+        desiredY = Math.max(desiredY, playerBottom - visibleWorldH * bottomRatio);
       } else if (!leadPlayer.onGround) {
-        // Never pan downward while the player is rising or hanging in the air.
         desiredY = Math.min(desiredY, cameraY);
       }
     }
@@ -10764,6 +10884,7 @@
     const verticalSpeed = movingUp ? 460 : leadPlayer && !leadPlayer.onGround ? 260 : 180;
     cameraY += clamp(verticalStep, -verticalSpeed * dt, verticalSpeed * dt);
     if (Math.abs(cameraTargetY - cameraY) < 0.02) cameraY = cameraTargetY;
+    cameraY = clampCameraY(cameraY);
   }
 
   function updateHud() {
