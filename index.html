@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>Iron Reign: Urban Assault v8.2 Online</title>
+<title>Iron Reign: Urban Assault v8.2.2 Online</title>
 <style>
   :root {
     --safe-top: env(safe-area-inset-top, 0px);
@@ -43,6 +43,8 @@
 (() => {
   "use strict";
 
+  // IRON REIGN ONLINE v8.2.2 MULTIPLAYER CLIENT
+
   const canvas = document.getElementById("game");
   const ctx = canvas.getContext("2d", { alpha: false });
 
@@ -78,7 +80,7 @@
   });
 
   const MULTIPLAYER_PROTOCOL = 1;
-  const MULTIPLAYER_VERSION = "iron-reign-online-8.2";
+  const MULTIPLAYER_VERSION = "iron-reign-online-8.2.2";
   const ROOM_CODE_LENGTH = 5;
   const MAX_ONLINE_PLAYERS = 4;
   const ONLINE_API = ["localhost", "127.0.0.1"].includes(location.hostname)
@@ -101,7 +103,7 @@
 
   const neutralNetworkInput = () => ({
     moveX: 0, aimX: 1, aimY: 0, down: false, fire: false,
-    jumpSeq: 0, powerSeq: 0, seq: 0
+    fireSeq: 0, jumpSeq: 0, powerSeq: 0, seq: 0
   });
 
   const net = {
@@ -1563,6 +1565,7 @@
     aimX /= length;
     aimY /= length;
 
+    const firePressed = consumePresses && touchUi ? takePress("KeyF") : false;
     return {
       moveX: useTouch ? touchStick.moveX : keyboardMove,
       aimX,
@@ -1571,7 +1574,8 @@
       jumpPressed: consumePresses ? takePress("KeyW") : false,
       down,
       duck: down && player.onGround,
-      fire: touchUi ? pressed("KeyF") : mouseInput.fire,
+      fire: touchUi ? pressed("KeyF") || firePressed : mouseInput.fire,
+      firePressed,
       power: touchUi ? pressed("KeyG") : pressed("KeyE"),
       powerPressed: consumePresses ? (touchUi ? takePress("KeyG") : takePress("KeyE")) : false
     };
@@ -1579,10 +1583,13 @@
 
   function networkControlsForPlayer(player) {
     const row = net.inputs.get(player.index) || neutralNetworkInput();
+    const fireSeq = Math.max(0, Number(row.fireSeq) || 0);
     const jumpSeq = Math.max(0, Number(row.jumpSeq) || 0);
     const powerSeq = Math.max(0, Number(row.powerSeq) || 0);
+    const firePressed = fireSeq > (player.netFireSeq || 0);
     const jumpPressed = jumpSeq > (player.netJumpSeq || 0);
     const powerPressed = powerSeq > (player.netPowerSeq || 0);
+    if (firePressed) player.netFireSeq = fireSeq;
     if (jumpPressed) player.netJumpSeq = jumpSeq;
     if (powerPressed) player.netPowerSeq = powerSeq;
     return {
@@ -1593,7 +1600,8 @@
       jumpPressed,
       down: Boolean(row.down),
       duck: Boolean(row.down) && player.onGround,
-      fire: Boolean(row.fire),
+      fire: Boolean(row.fire) || firePressed,
+      firePressed,
       power: false,
       powerPressed
     };
@@ -4277,6 +4285,31 @@
     echoes: "summon"
   });
 
+  // Central range roles keep every boss using the same deterministic selection
+  // rule. Near attacks are skipped when the player is far away, and far attacks
+  // are skipped when the player is already beside the boss. Unlisted attacks are
+  // flexible and remain valid at any distance.
+  const BOSS_ATTACK_RANGES = Object.freeze({
+    stomp: "near",
+    crush: "near",
+    phaseDash: "near",
+    rain: "far",
+    debris: "far",
+    cross: "far",
+    laser: "far",
+    summon: "far",
+    missiles: "far",
+    gravity: "far",
+    roots: "far",
+    mortar: "far",
+    bombRun: "far",
+    deploy: "far",
+    rootWall: "far",
+    avalanche: "far",
+    gearWall: "far",
+    echoes: "far"
+  });
+
   function drawBossTelegraph(boss) {
     if (boss.telegraphTimer <= 0 || !boss.telegraphCue) return;
     const duration = Math.max(0.001, boss.telegraphDuration);
@@ -4517,6 +4550,37 @@
       return this.facing;
     }
 
+    targetGap(target = this.target()) {
+      if (!target) return Infinity;
+      if (target.x > this.x + this.w) return target.x - (this.x + this.w);
+      if (this.x > target.x + target.w) return this.x - (target.x + target.w);
+      return 0;
+    }
+
+    attackFitsTargetRange(name, target = this.target()) {
+      const role = BOSS_ATTACK_RANGES[name] || "any";
+      const gap = this.targetGap(target);
+      if (role === "near") return gap < 500;
+      if (role === "far") return gap > 250;
+      return true;
+    }
+
+    selectAttackForTarget(scheduledAttack, attackIndex, previousName = null, skipSummon = false) {
+      const attacks = this.profile.attacks || [];
+      if (!attacks.length) return scheduledAttack;
+      const target = this.target();
+      const allowed = name =>
+        name !== previousName &&
+        (!skipSummon || name !== "summon") &&
+        this.attackFitsTargetRange(name, target);
+      if (allowed(scheduledAttack)) return scheduledAttack;
+      for (let offset = 1; offset <= attacks.length; offset++) {
+        const candidate = attacks[(attackIndex + offset) % attacks.length];
+        if (allowed(candidate)) return candidate;
+      }
+      return scheduledAttack;
+    }
+
     displayFacing() {
       return this.faceTarget();
     }
@@ -4577,9 +4641,10 @@
           this.attackTimer = menuDifficulty <= 1 ? 0.34 : 0.22;
         } else {
           const scheduledAttack = this.profile.attacks[this.attackMode % this.profile.attacks.length];
+          const rangedAttack = this.selectAttackForTarget(scheduledAttack, this.attackMode);
           const attackName = bossArena && bossArena.boss === this
-            ? bossArena.selectBossAttack(scheduledAttack, this.attackMode)
-            : scheduledAttack;
+            ? bossArena.selectBossAttack(rangedAttack, this.attackMode)
+            : rangedAttack;
           this.attackMode++;
           this.beginBossAttack(attackName, false);
           const baseCadence = this.profile.cadence || (2.92 - Math.min(0.58, campaignLevel * 0.11));
@@ -4657,11 +4722,13 @@
     selectComboAttack(previousName) {
       const attacks = this.profile.attacks;
       if (!attacks || attacks.length < 2) return null;
-      for (let offset = 0; offset < attacks.length; offset++) {
-        const candidate = attacks[(this.attackMode + offset) % attacks.length];
-        if (candidate !== previousName && candidate !== "summon") return candidate;
-      }
-      return attacks[(this.attackMode + 1) % attacks.length];
+      const candidate = this.selectAttackForTarget(
+        attacks[this.attackMode % attacks.length],
+        this.attackMode,
+        previousName,
+        true
+      );
+      return candidate !== previousName && candidate !== "summon" ? candidate : null;
     }
 
     beginBossAttack(name, combo = false) {
@@ -8437,7 +8504,10 @@
         emperor: ["missiles", "nova", "gearWall"],
         hunter: ["debris", "missiles", "fan"]
       }[this.boss.profile.form] || [];
-      const available = antiAir.filter(name => this.boss.profile.attacks.includes(name));
+      const available = antiAir.filter(name =>
+        this.boss.profile.attacks.includes(name) &&
+        this.boss.attackFitsTargetRange(name, player)
+      );
       if (!available.length) return scheduledAttack;
       return available[attackIndex % available.length];
     }
@@ -8784,7 +8854,7 @@
   function inputPacketChanged(a, b) {
     if (!a || !b) return true;
     return a.moveX !== b.moveX || a.down !== b.down || a.fire !== b.fire ||
-      a.jumpSeq !== b.jumpSeq || a.powerSeq !== b.powerSeq ||
+      a.fireSeq !== b.fireSeq || a.jumpSeq !== b.jumpSeq || a.powerSeq !== b.powerSeq ||
       Math.abs(a.aimX - b.aimX) > 0.025 || Math.abs(a.aimY - b.aimY) > 0.025;
   }
 
@@ -8800,6 +8870,7 @@
       aimY: Math.round(clamp(controls.aimY, -1, 1) * 1000) / 1000,
       down: Boolean(controls.down),
       fire: Boolean(controls.fire),
+      fireSeq: (previous.fireSeq || 0) + (controls.firePressed ? 1 : 0),
       jumpSeq: (previous.jumpSeq || 0) + (controls.jumpPressed ? 1 : 0),
       powerSeq: (previous.powerSeq || 0) + (controls.powerPressed ? 1 : 0),
       seq: (previous.seq || 0) + 1
@@ -12146,7 +12217,7 @@
     ctx.fillStyle = UI_THEME.muted;
     ctx.font = `700 ${7 * scale}px ${UI_FONT}`;
     ctx.textAlign = "right";
-    ctx.fillText("v8.2 ONLINE", x + panelW - 8 * scale, y + panelH - 7 * scale);
+    ctx.fillText("v8.2.2 ONLINE", x + panelW - 8 * scale, y + panelH - 7 * scale);
   }
 
 
@@ -12369,7 +12440,7 @@
     ctx.fillStyle = UI_THEME.muted;
     ctx.font = `700 ${7 * scale}px ${UI_FONT}`;
     ctx.textAlign = "right";
-    ctx.fillText("v8.2 ONLINE", x + panelW - 8 * scale, y + panelH - 7 * scale);
+    ctx.fillText("v8.2.2 ONLINE", x + panelW - 8 * scale, y + panelH - 7 * scale);
   }
 
   function drawCharacterPreview(profile, cx, cy, scale, selected = false) {
@@ -12534,10 +12605,13 @@
     ctx.fillStyle = UI_THEME.muted;
     ctx.font = `700 ${7 * scale}px ${UI_FONT}`;
     ctx.textAlign = "right";
-    ctx.fillText("v8.2 ONLINE", x + panelW - 8 * scale, y + panelH - 7 * scale);
+    ctx.fillText("v8.2.2 ONLINE", x + panelW - 8 * scale, y + panelH - 7 * scale);
   }
 
   function drawCanvasMenu() {
+    // Rebuild hit regions for only the screen currently being drawn. This keeps
+    // stale buttons from the previous menu from remaining touch-active.
+    uiRects.menu = {};
     if (menuScreen === "character") drawCharacterSelect();
     else if (menuScreen === "continue") drawContinueScreen();
     else if (menuScreen === "multiplayer") drawMultiplayerBrowser();
@@ -13163,6 +13237,24 @@
     }
   }
 
+  const menuPointerPress = {
+    pointerId: null,
+    screen: "",
+    action: null,
+    startX: 0,
+    startY: 0,
+    cancelled: false
+  };
+
+  function clearMenuPointerPress() {
+    menuPointerPress.pointerId = null;
+    menuPointerPress.screen = "";
+    menuPointerPress.action = null;
+    menuPointerPress.startX = 0;
+    menuPointerPress.startY = 0;
+    menuPointerPress.cancelled = false;
+  }
+
   function clearControls() {
     for (const key in keys) keys[key] = false;
     for (const key in touchKeys) touchKeys[key] = false;
@@ -13170,6 +13262,7 @@
     mouseInput.fire = false;
     pointerActions.clear();
     uiRects.buttons = {};
+    clearMenuPointerPress();
     resetJoystick(false);
   }
 
@@ -13244,7 +13337,7 @@
     }
 
     for (const code of next) {
-      if ((!previous || !previous.has(code)) && (code === "KeyW" || code === "KeyG")) {
+      if ((!previous || !previous.has(code)) && (code === "KeyF" || code === "KeyW" || code === "KeyG")) {
         queuePress(code);
       }
     }
@@ -13280,12 +13373,113 @@
     audio.ui("move");
   }
 
+  function menuRectContains(rect, point) {
+    if (!rect) return false;
+    const padding = touchUi ? 2 * uiScaleFactor() : 0;
+    return point.x >= rect.x - padding && point.x <= rect.x + rect.w + padding &&
+      point.y >= rect.y - padding && point.y <= rect.y + rect.h + padding;
+  }
+
   function characterIndexAtPoint(point) {
     const cards = uiRects.menu.characters || [];
     for (let i = 0; i < cards.length; i++) {
-      if (uiRectContains(cards[i], point.x, point.y)) return i;
+      if (menuRectContains(cards[i], point)) return i;
     }
     return -1;
+  }
+
+  function menuActionAtPoint(point) {
+    const m = uiRects.menu;
+    const action = (id, rect, activate) => menuRectContains(rect, point) ? { id, activate } : null;
+
+    if (menuScreen === "character") {
+      const characterIndex = characterIndexAtPoint(point);
+      if (characterIndex >= 0) return { id: `character:${characterIndex}`, activate: () => {
+        menuCharacter = characterIndex;
+        characterFocus = 0;
+        audio.ui("move");
+      } };
+      return action("character:deploy", m.characterDeploy, begin) ||
+        action("character:back", m.characterBack, closeCharacterSelect);
+    }
+
+    if (menuScreen === "continue") {
+      return action("continue:run", m.continueRun, continueMission) ||
+        action("continue:menu", m.continueMenu, abandonContinue);
+    }
+
+    if (menuScreen === "multiplayer") {
+      const room = (m.roomRows || []).find(rect => menuRectContains(rect, point));
+      if (room && room.joinable) return { id: `room:${room.code}`, activate: () => joinOnlineRoom(room.code) };
+      return action("multiplayer:create", m.createRoom, createOnlineRoom) ||
+        action("multiplayer:enter", m.enterRoom, promptForRoomCode) ||
+        action("multiplayer:refresh", m.refreshRooms, refreshOnlineRooms) ||
+        action("multiplayer:back", m.onlineBack, () => { resetNetwork("solo"); menuScreen = "main"; menuFocus = 3; });
+    }
+
+    if (menuScreen === "lobby") {
+      return action("lobby:character", m.lobbyCharacter, () => cycleLobbyCharacter(1)) ||
+        (isRoomOwner() ? action("lobby:level-prev", m.lobbyLevelPrev, () => { cycleMenuLevel(-1); sendLobbySettings(); }) : null) ||
+        (isRoomOwner() ? action("lobby:level-next", m.lobbyLevelNext, () => { cycleMenuLevel(1); sendLobbySettings(); }) : null) ||
+        (isRoomOwner() ? action("lobby:diff-prev", m.lobbyDiffPrev, () => { cycleMenuDifficulty(-1); sendLobbySettings(); }) : null) ||
+        (isRoomOwner() ? action("lobby:diff-next", m.lobbyDiffNext, () => { cycleMenuDifficulty(1); sendLobbySettings(); }) : null) ||
+        action("lobby:invite", m.copyInvite, copyInviteLink) ||
+        action("lobby:primary", m.lobbyPrimary, () => {
+          if (isRoomOwner()) {
+            if (onlineLobbyReady()) requestOnlineStart();
+            else setNetworkStatus("WAITING FOR EVERYONE TO READY UP", "pending");
+          } else {
+            const row = net.roster.get(net.localId);
+            setLocalReady(!(row && row.ready));
+          }
+        }) ||
+        action("lobby:leave", m.leaveRoom, () => leaveOnlineSession(true));
+    }
+
+    return action("main:level-prev", m.levelPrev, () => cycleMenuLevel(-1)) ||
+      action("main:level-next", m.levelNext, () => cycleMenuLevel(1)) ||
+      action("main:diff-prev", m.diffPrev, () => cycleMenuDifficulty(-1)) ||
+      action("main:diff-next", m.diffNext, () => cycleMenuDifficulty(1)) ||
+      action("main:solo", m.solo, openCharacterSelect) ||
+      action("main:multiplayer", m.multiplayer, openMultiplayerMenu) ||
+      action("main:music", m.music, () => audio.toggleMusic()) ||
+      action("main:fullscreen", m.fullscreen, toggleFullscreen);
+  }
+
+  function beginMenuPointerPress(event, point) {
+    if (menuPointerPress.pointerId !== null) return false;
+    const action = menuActionAtPoint(point);
+    if (!action) return false;
+    menuPointerPress.pointerId = event.pointerId;
+    menuPointerPress.screen = menuScreen;
+    menuPointerPress.action = action;
+    menuPointerPress.startX = point.x;
+    menuPointerPress.startY = point.y;
+    menuPointerPress.cancelled = false;
+    const focus = menuFocusAtPoint(point);
+    if (focus !== null) {
+      if (menuScreen === "character") characterFocus = focus;
+      else if (menuScreen === "continue") continueFocus = focus;
+      else if (menuScreen === "main") menuFocus = focus;
+    }
+    return true;
+  }
+
+  function updateMenuPointerPress(pointerId, point) {
+    if (menuPointerPress.pointerId !== pointerId) return false;
+    const moved = Math.hypot(point.x - menuPointerPress.startX, point.y - menuPointerPress.startY);
+    if (moved > 18 * uiScaleFactor()) menuPointerPress.cancelled = true;
+    return true;
+  }
+
+  function finishMenuPointerPress(event, point) {
+    if (menuPointerPress.pointerId !== event.pointerId) return false;
+    const pressed = menuPointerPress.action;
+    const released = menuScreen === menuPointerPress.screen ? menuActionAtPoint(point) : null;
+    const activate = !menuPointerPress.cancelled && pressed && released && pressed.id === released.id;
+    clearMenuPointerPress();
+    if (activate) pressed.activate();
+    return true;
   }
 
   function menuFocusAtPoint(point) {
@@ -13362,44 +13556,7 @@
     }
 
     if (!running && levelState === "menu") {
-      const m = uiRects.menu;
-      if (menuScreen === "character") {
-        const characterIndex = characterIndexAtPoint(point);
-        if (characterIndex >= 0) {
-          menuCharacter = characterIndex;
-          characterFocus = 0;
-          audio.ui("move");
-        } else if (uiRectContains(m.characterDeploy, point.x, point.y)) begin();
-        else if (uiRectContains(m.characterBack, point.x, point.y)) closeCharacterSelect();
-      } else if (menuScreen === "continue") {
-        if (uiRectContains(m.continueRun, point.x, point.y)) continueMission();
-        else if (uiRectContains(m.continueMenu, point.x, point.y)) abandonContinue();
-      } else if (menuScreen === "multiplayer") {
-        const room = (m.roomRows || []).find(rect => uiRectContains(rect, point.x, point.y));
-        if (room && room.joinable) joinOnlineRoom(room.code);
-        else if (uiRectContains(m.createRoom, point.x, point.y)) createOnlineRoom();
-        else if (uiRectContains(m.enterRoom, point.x, point.y)) promptForRoomCode();
-        else if (uiRectContains(m.refreshRooms, point.x, point.y)) refreshOnlineRooms();
-        else if (uiRectContains(m.onlineBack, point.x, point.y)) { resetNetwork("solo"); menuScreen = "main"; }
-      } else if (menuScreen === "lobby") {
-        if (uiRectContains(m.lobbyCharacter, point.x, point.y)) cycleLobbyCharacter(1);
-        else if (isRoomOwner() && uiRectContains(m.lobbyLevelPrev, point.x, point.y)) { cycleMenuLevel(-1); sendLobbySettings(); }
-        else if (isRoomOwner() && uiRectContains(m.lobbyLevelNext, point.x, point.y)) { cycleMenuLevel(1); sendLobbySettings(); }
-        else if (isRoomOwner() && uiRectContains(m.lobbyDiffPrev, point.x, point.y)) { cycleMenuDifficulty(-1); sendLobbySettings(); }
-        else if (isRoomOwner() && uiRectContains(m.lobbyDiffNext, point.x, point.y)) { cycleMenuDifficulty(1); sendLobbySettings(); }
-        else if (uiRectContains(m.copyInvite, point.x, point.y)) copyInviteLink();
-        else if (uiRectContains(m.lobbyPrimary, point.x, point.y)) {
-          if (isRoomOwner()) { if (onlineLobbyReady()) requestOnlineStart(); else setNetworkStatus("WAITING FOR EVERYONE TO READY UP", "pending"); }
-          else { const row = net.roster.get(net.localId); setLocalReady(!(row && row.ready)); }
-        } else if (uiRectContains(m.leaveRoom, point.x, point.y)) leaveOnlineSession(true);
-      } else if (uiRectContains(m.levelPrev, point.x, point.y)) cycleMenuLevel(-1);
-      else if (uiRectContains(m.levelNext, point.x, point.y)) cycleMenuLevel(1);
-      else if (uiRectContains(m.diffPrev, point.x, point.y)) cycleMenuDifficulty(-1);
-      else if (uiRectContains(m.diffNext, point.x, point.y)) cycleMenuDifficulty(1);
-      else if (uiRectContains(m.solo, point.x, point.y)) openCharacterSelect();
-      else if (uiRectContains(m.multiplayer, point.x, point.y)) openMultiplayerMenu();
-      else if (uiRectContains(m.music, point.x, point.y)) audio.toggleMusic();
-      else if (uiRectContains(m.fullscreen, point.x, point.y)) toggleFullscreen();
+      beginMenuPointerPress(event, point);
       return;
     }
 
@@ -13444,8 +13601,10 @@
   });
 
   canvas.addEventListener("pointermove", event => {
+    const point = canvasPoint(event);
+    const controlsMenu = updateMenuPointerPress(event.pointerId, point);
+
     if (event.pointerType === "mouse") {
-      const point = canvasPoint(event);
       if (!running && levelState === "menu") {
         const focus = menuFocusAtPoint(point);
         if (focus !== null) {
@@ -13455,7 +13614,7 @@
             if (characterIndex >= 0) menuCharacter = characterIndex;
           } else if (menuScreen === "continue") {
             continueFocus = focus;
-          } else {
+          } else if (menuScreen === "main") {
             menuFocus = focus;
           }
         }
@@ -13473,12 +13632,16 @@
       return;
     }
 
+    if (controlsMenu) {
+      event.preventDefault();
+      return;
+    }
+
     const controlsJoystick = touchStick.active && event.pointerId === touchStick.pointerId;
     const controlsActions = pointerActions.has(event.pointerId);
     if (!controlsJoystick && !controlsActions) return;
 
     event.preventDefault();
-    const point = canvasPoint(event);
     if (controlsJoystick) updateStickPoint(point.x, point.y);
 
     // Recalculate the buttons under this contact on every move. A broad finger
@@ -13486,9 +13649,19 @@
     if (controlsActions) updateCanvasActions(event.pointerId, actionCodesAtPoint(point, event));
   });
 
-  for (const name of ["pointerup", "pointercancel", "lostpointercapture"]) {
+
+  canvas.addEventListener("pointerup", event => {
+    event.preventDefault();
+    const point = canvasPoint(event);
+    finishMenuPointerPress(event, point);
+    if (event.pointerType === "mouse") mouseInput.fire = false;
+    releaseCanvasPointer(event.pointerId);
+  });
+
+  for (const name of ["pointercancel", "lostpointercapture"]) {
     canvas.addEventListener(name, event => {
       event.preventDefault();
+      if (menuPointerPress.pointerId === event.pointerId) clearMenuPointerPress();
       if (event.pointerType === "mouse") mouseInput.fire = false;
       releaseCanvasPointer(event.pointerId);
     });
