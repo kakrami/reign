@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>Iron Reign: Urban Assault v8.6.0 Online</title>
+<title>Iron Reign: Urban Assault v8.7.0 Online</title>
 <style>
   :root {
     --safe-top: env(safe-area-inset-top, 0px);
@@ -43,7 +43,7 @@
 (() => {
   "use strict";
 
-  // IRON REIGN ONLINE v8.6.0 UNIFIED GAME UI
+  // IRON REIGN ONLINE v8.7.0 UNIFIED GAME UI
 
   const canvas = document.getElementById("game");
   const ctx = canvas.getContext("2d", { alpha: false });
@@ -80,7 +80,7 @@
   });
 
   const MULTIPLAYER_PROTOCOL = 1;
-  const MULTIPLAYER_VERSION = "iron-reign-online-8.6.0";
+  const MULTIPLAYER_VERSION = "iron-reign-online-8.7.0";
   const ROOM_CODE_LENGTH = 5;
   const MAX_ONLINE_PLAYERS = 4;
   const ONLINE_API = ["localhost", "127.0.0.1"].includes(location.hostname)
@@ -141,6 +141,8 @@
     droppedStatePackets: 0,
     simulationX: null,
     simulationY: null,
+    simulationW: null,
+    simulationH: null,
     preferredCharacter: 0
   };
 
@@ -177,34 +179,34 @@
   const DIFFICULTY_OPTIONS = Object.freeze([
     Object.freeze({
       label: "RECRUIT", enemyHealth: 0.66, bossHealth: 0.68, damage: 0.46,
-      cadence: 1.50, bossCadence: 1.56, recovery: 100, bossHealthFloor: 90,
+      cadence: 1.50, bossCadence: 1.05, recovery: 100, bossHealthFloor: 90,
       patternBonus: -2, bossComboMode: 0, summonCap: 1, startLives: 4,
-      telegraph: 1.38, tierPressure: 0.04, levelPressure: 0,
-      bossMinInterval: 1.95, projectileCap: 20, enemyDensity: 0.72,
+      telegraph: 1.18, tierPressure: 0.04, levelPressure: 0,
+      bossMinInterval: 1.05, projectileCap: 24, enemyDensity: 0.72,
       hitInvuln: 1.85, bossSpecialFloor: 1, missileCap: 2, phaseClear: true
     }),
     Object.freeze({
       label: "ARCADE", enemyHealth: 0.82, bossHealth: 0.82, damage: 0.64,
-      cadence: 1.34, bossCadence: 1.42, recovery: 75, bossHealthFloor: 75,
+      cadence: 1.34, bossCadence: 0.98, recovery: 75, bossHealthFloor: 75,
       patternBonus: -1, bossComboMode: 0, summonCap: 2, startLives: 3,
-      telegraph: 1.24, tierPressure: 0.07, levelPressure: 0.004,
-      bossMinInterval: 1.75, projectileCap: 28, enemyDensity: 0.88,
+      telegraph: 1.08, tierPressure: 0.07, levelPressure: 0.004,
+      bossMinInterval: 0.92, projectileCap: 32, enemyDensity: 0.88,
       hitInvuln: 1.65, bossSpecialFloor: 1, missileCap: 3, phaseClear: true
     }),
     Object.freeze({
       label: "VETERAN", enemyHealth: 1.00, bossHealth: 0.98, damage: 0.90,
-      cadence: 1.10, bossCadence: 1.14, recovery: 60, bossHealthFloor: 50,
+      cadence: 1.10, bossCadence: 0.90, recovery: 60, bossHealthFloor: 50,
       patternBonus: 0, bossComboMode: 1, summonCap: 3, startLives: 3,
-      telegraph: 1.06, tierPressure: 0.13, levelPressure: 0.014,
-      bossMinInterval: 1.40, projectileCap: 42, enemyDensity: 0.96,
+      telegraph: 0.96, tierPressure: 0.13, levelPressure: 0.014,
+      bossMinInterval: 0.80, projectileCap: 46, enemyDensity: 0.96,
       hitInvuln: 1.35, bossSpecialFloor: 0, missileCap: 4, phaseClear: false
     }),
     Object.freeze({
       label: "NIGHTMARE", enemyHealth: 1.16, bossHealth: 1.12, damage: 1.08,
-      cadence: 0.94, bossCadence: 0.96, recovery: 45, bossHealthFloor: 0,
+      cadence: 0.94, bossCadence: 0.82, recovery: 45, bossHealthFloor: 0,
       patternBonus: 1, bossComboMode: 2, summonCap: 5, startLives: 2,
-      telegraph: 0.92, tierPressure: 0.20, levelPressure: 0.024,
-      bossMinInterval: 1.14, projectileCap: 56, enemyDensity: 1.00,
+      telegraph: 0.84, tierPressure: 0.20, levelPressure: 0.024,
+      bossMinInterval: 0.70, projectileCap: 60, enemyDensity: 1.00,
       hitInvuln: 1.15, bossSpecialFloor: 0, missileCap: 5, phaseClear: false
     })
   ]);
@@ -602,6 +604,46 @@
     return [12, 17, 24, 32][menuDifficulty] ?? 17;
   }
 
+  function bossEncounterPlayerCount() {
+    if (onlineSession()) {
+      const roster = networkActiveRoster();
+      if (roster.length) return clamp(roster.length, 1, 4);
+    }
+    const active = players.filter(player => player && player.lives > 0).length;
+    return clamp(active || players.length || 1, 1, 4);
+  }
+
+  function bossEncounterHealthScale() {
+    const soloScale = [1.12, 1.22, 1.36, 1.52][menuDifficulty] ?? 1.22;
+    const coopScale = 1 + Math.max(0, bossEncounterPlayerCount() - 1) * 0.52;
+    return soloScale * coopScale * currentLevelBalance().bossHealth;
+  }
+
+  function bossActionRecovery(base = 0.9) {
+    const scale = [0.72, 0.66, 0.60, 0.54][menuDifficulty] ?? 0.66;
+    return clamp(base * scale, 0.42, 0.78);
+  }
+
+  function bossHasCommittedAction(boss) {
+    return Boolean(boss && (
+      boss.tankAction || boss.flightAction || boss.beastAction ||
+      boss.iceAction || boss.emperorAction
+    ));
+  }
+
+  function bossThreatCount(boss) {
+    if (!boss) return 0;
+    const left = boss.arenaLeft - 180;
+    const right = boss.arenaRight + 180;
+    const inArena = object => object && !object.dead &&
+      Number.isFinite(object.x) && Number.isFinite(object.w) &&
+      object.x + object.w >= left && object.x <= right;
+    return enemyBullets.filter(inArena).length +
+      debris.filter(inArena).length +
+      hazards.filter(object => inArena(object) && !(object instanceof Hazard)).length +
+      enemies.filter(inArena).length;
+  }
+
   function pruneDead(list) {
     let write = 0;
     for (let read = 0; read < list.length; read++) {
@@ -905,17 +947,32 @@
   const SIMULATION_VIEW_H = 900;
 
   function gameplaySimulationView() {
-    const width = Math.min(SIMULATION_VIEW_W, LEVEL_W);
-    const height = SIMULATION_VIEW_H;
+    const baseWidth = Math.min(SIMULATION_VIEW_W, LEVEL_W);
+    const baseHeight = SIMULATION_VIEW_H;
     if (onlineSession() && !isNetworkAuthority() && Number.isFinite(net.simulationX) && Number.isFinite(net.simulationY)) {
+      const width = clamp(Number(net.simulationW) || baseWidth, baseWidth, Math.min(3200, LEVEL_W));
+      const height = clamp(Number(net.simulationH) || baseHeight, baseHeight, 1300);
       return { left: net.simulationX, right: net.simulationX + width, top: net.simulationY, bottom: net.simulationY + height, width, height };
     }
+
+    const living = players.filter(player => player && !player.dead && player.lives > 0);
+    if (onlineSession() && living.length > 1) {
+      const minX = Math.min(...living.map(player => player.cx));
+      const maxX = Math.max(...living.map(player => player.cx));
+      const width = clamp(Math.max(baseWidth, maxX - minX + 760), baseWidth, Math.min(3200, LEVEL_W));
+      const left = clamp(minX - 260, 0, Math.max(0, LEVEL_W - width));
+      const focusX = clamp((minX + maxX) * 0.5, left, left + width);
+      const ground = terrainSurfaceY(focusX);
+      const top = clampCameraY(ground - baseHeight * 0.68);
+      return { left, right: left + width, top, bottom: top + baseHeight, width, height: baseHeight };
+    }
+
     const focus = frontAlivePlayer();
     const focusX = focus ? focus.cx : checkpointX;
-    const left = clamp(focusX - width * 0.36, 0, Math.max(0, LEVEL_W - width));
+    const left = clamp(focusX - baseWidth * 0.36, 0, Math.max(0, LEVEL_W - baseWidth));
     const ground = terrainSurfaceY(focusX);
-    const top = clampCameraY(ground - height * 0.68);
-    return { left, right: left + width, top, bottom: top + height, width, height };
+    const top = clampCameraY(ground - baseHeight * 0.68);
+    return { left, right: left + baseWidth, top, bottom: top + baseHeight, width: baseWidth, height: baseHeight };
   }
 
   function resize() {
@@ -1924,9 +1981,11 @@
       }
 
       const simulationView = gameplaySimulationView();
-      let leftBound = simulationView.left + 24;
+      let leftBound = onlineSession()
+        ? WORLD_ZONES[clamp(campaignLevel | 0, 0, WORLD_ZONES.length - 1)].start + 24
+        : simulationView.left + 24;
       let rightBound = LEVEL_W - 40;
-      if (bossArena && bossArena.isLocked()) {
+      if (bossArena && bossArena.isLocked() && bossArena.playerInside(this, 0)) {
         leftBound = bossArena.left + 34;
         rightBound = bossArena.right - 34;
       }
@@ -4411,9 +4470,10 @@
     phaseDash: "pursuit",
     gearWall: "mid",
     echoes: "mid",
-    roots: "ranged",
-    rootWall: "ranged",
-    iceField: "ranged"
+    laser: "mid",
+    roots: "mid",
+    rootWall: "mid",
+    iceField: "mid"
   });
 
   const BOSS_CUE_ROLES = Object.freeze({
@@ -4554,10 +4614,15 @@
         ctx.stroke();
       }
     } else if (cue === "sweep") {
-      const groundY = terrainLaneY((boss.arenaLeft + boss.arenaRight) * 0.5, true) - 14;
+      const laserAttack = boss.pendingAttackName === "laser";
+      const centerX = (boss.arenaLeft + boss.arenaRight) * 0.5;
+      const groundY = terrainSurfaceY(centerX);
+      const beamY = laserAttack
+        ? (boss.telegraphLane === "high" ? groundY - 69 : groundY - 27)
+        : terrainLaneY(centerX, true) - 14;
       const fromX = direction > 0 ? boss.arenaLeft + 45 : boss.arenaRight - 45;
       const toX = direction > 0 ? boss.arenaRight - 45 : boss.arenaLeft + 45;
-      const leadingX = mix(fromX, toX, progress);
+      const leadingX = laserAttack ? toX : mix(fromX, toX, progress);
       const gradient = ctx.createLinearGradient(fromX, 0, toX, 0);
       gradient.addColorStop(0, "rgba(255,255,255,0)");
       gradient.addColorStop(clamp(progress - 0.18, 0, 1), accent);
@@ -4565,14 +4630,15 @@
       gradient.addColorStop(clamp(progress + 0.08, 0, 1), "rgba(255,255,255,0)");
       ctx.globalAlpha = 0.30 + progress * 0.48;
       ctx.strokeStyle = gradient;
-      ctx.lineWidth = 8 + pulse * 3;
+      ctx.lineWidth = laserAttack ? 6 + progress * 18 : 8 + pulse * 3;
       ctx.beginPath();
-      ctx.moveTo(fromX, groundY);
-      ctx.lineTo(leadingX, groundY);
+      ctx.moveTo(fromX, beamY);
+      ctx.lineTo(leadingX, beamY);
       ctx.stroke();
-      ctx.globalAlpha = 0.20 + progress * 0.28;
+      ctx.globalAlpha = 0.16 + progress * 0.30;
       ctx.fillStyle = accent;
-      ctx.fillRect(Math.min(fromX, leadingX), groundY - 28, Math.abs(leadingX - fromX), 56);
+      const warningHeight = laserAttack ? 30 : 56;
+      ctx.fillRect(Math.min(fromX, leadingX), beamY - warningHeight * 0.5, Math.abs(leadingX - fromX), warningHeight);
     } else if (cue === "sky") {
       const left = boss.arenaLeft + 120;
       const right = boss.arenaRight - 120;
@@ -4649,7 +4715,7 @@
       this.key = key;
       this.profile = profile;
       this.name = profile.name;
-      this.maxHealth = profile.health * enemyHealthScale(true);
+      this.maxHealth = profile.health * bossEncounterHealthScale();
       this.health = this.maxHealth;
       this.phase = 0;
       this.introTimer = 1.45;
@@ -4659,6 +4725,7 @@
       this.telegraphCue = "";
       this.telegraphTargetX = null;
       this.telegraphTargetY = null;
+      this.telegraphLane = "";
       this.pendingAttack = null;
       this.pendingAttackName = null;
       this.pendingAttackCombo = false;
@@ -4860,7 +4927,7 @@
         ? Math.min(8, this.stationaryTargetTime + dt)
         : Math.max(0, this.stationaryTargetTime - dt * 1.8);
       this.attackSilence += dt;
-      const silenceLimit = this.profile.campaignFinal ? 3.6 : 4.8;
+      const silenceLimit = ([3.0, 2.55, 2.15, 1.80][menuDifficulty] ?? 2.55) - (this.profile.campaignFinal ? 0.35 : 0);
       if (this.attackSilence >= silenceLimit) this.attackTimer = Math.min(this.attackTimer, 0);
       this.attackTimer -= dt;
       if (this.attackTimer <= 0) {
@@ -4885,10 +4952,14 @@
         const levelPressure = campaignLevel * difficulty.levelPressure;
         const recoveryWindow = menuDifficulty <= 1 ? 0.18 : menuDifficulty === 2 ? 0.08 : 0;
         const pressureDelay = pressure > bossPressureLimit() ? 0.12 : 0;
-        this.attackTimer = Math.max(
+        const rosterPressure = Math.max(0, bossEncounterPlayerCount() - 1) * 0.10;
+        const maximumCadence = Math.max(
           difficulty.bossMinInterval,
-          (baseCadence - tierPressure - levelPressure) * enemyCadenceScale(true) + recoveryWindow + pressureDelay
+          ([1.78, 1.58, 1.38, 1.18][menuDifficulty] ?? 1.58) - rosterPressure - this.combatTier * 0.07
         );
+        const calculatedCadence =
+          (baseCadence - tierPressure - levelPressure) * enemyCadenceScale(true) + recoveryWindow + pressureDelay;
+        this.attackTimer = clamp(calculatedCadence, difficulty.bossMinInterval, maximumCadence);
       }
 
       for (const player of players) {
@@ -4902,7 +4973,7 @@
     enterCombatTier(tier) {
       this.combatTier = tier;
       this.phaseShield = 0.68;
-      this.attackTimer = Math.max(this.attackTimer, tier === 1 ? 1.25 : 1.45);
+      this.attackTimer = Math.min(Math.max(this.attackTimer, 0.38), tier === 1 ? 0.62 : 0.72);
       this.comboTimer = 0;
       this.comboAttackName = null;
       this.pendingAttack = null;
@@ -4989,7 +5060,10 @@
       }
 
       const entry = this.attackDefinition(name);
+      const threatBefore = bossThreatCount(this);
       entry[0]();
+      const createdThreat = bossThreatCount(this) > threatBefore || bossHasCommittedAction(this);
+      if (!createdThreat && !["stomp", "crush"].includes(name)) this.fanBurst();
       this.lastAttackName = name;
       this.attackSilence = 0;
       this.clearTelegraph();
@@ -5018,6 +5092,11 @@
       this.telegraphDuration = duration;
       this.telegraphTargetX = null;
       this.telegraphTargetY = null;
+      this.telegraphLane = "";
+
+      if (name === "laser") {
+        this.telegraphLane = (this.attackMode + this.combatTier) % 2 === 0 ? "low" : "high";
+      }
 
       if (name === "gravity") {
         const target = this.target();
@@ -5052,6 +5131,7 @@
       this.telegraphCue = "";
       this.telegraphTargetX = null;
       this.telegraphTargetY = null;
+      this.telegraphLane = "";
       this.telegraphDuration = 0;
     }
 
@@ -5099,21 +5179,33 @@
     }
 
     laserSweep() {
-      const y = terrainLaneY((this.arenaLeft + this.arenaRight) * 0.5, true) - 14;
-      const direction = this.faceTarget();
-      const beams = scaledEncounterCount(3, 4, 5, 6) + Math.floor(this.combatTier / 2);
-      const startX = direction < 0 ? this.arenaRight - 40 : this.arenaLeft + 40;
-      for (let i = 0; i < beams; i++) {
-        enemyBullets.push(new EnemyBullet(startX - direction * i * 60, y, direction * (365 + this.combatTier * 20), 0, (15 + this.combatTier) * enemyDamageScale(), 15, this.profile.accent));
-      }
+      const lane = this.telegraphLane === "high" ? "high" : "low";
+      const centerX = (this.arenaLeft + this.arenaRight) * 0.5;
+      const groundY = terrainSurfaceY(centerX);
+      hazards.push(new BossLaserBeam(
+        this.arenaLeft + 38,
+        this.arenaRight - 38,
+        groundY,
+        lane,
+        this.profile.accent,
+        0.14,
+        0.46 + this.combatTier * 0.04,
+        18 + this.combatTier * 2
+      ));
       if (difficulty.bossComboMode >= 2 && this.combatTier >= 2) {
-        const highY = terrainLaneY((this.arenaLeft + this.arenaRight) * 0.5, false);
-        const highStartX = direction < 0 ? this.arenaRight + 130 : this.arenaLeft - 130;
-        for (let i = 0; i < 5; i++) {
-          enemyBullets.push(new EnemyBullet(highStartX - direction * i * 72, highY, direction * 455, 0, 17 * enemyDamageScale(), 13, this.profile.accent));
-        }
+        const opposite = lane === "high" ? "low" : "high";
+        hazards.push(new BossLaserBeam(
+          this.arenaLeft + 38,
+          this.arenaRight - 38,
+          groundY,
+          opposite,
+          "#fff36d",
+          0.92,
+          0.40,
+          19 + this.combatTier * 2
+        ));
       }
-      audio.tone(95, 0.22, "sawtooth", 0.12, 180);
+      audio.tone(lane === "high" ? 142 : 95, 0.30, "sawtooth", 0.12, 210);
     }
 
     shockwave() {
@@ -5263,12 +5355,16 @@
 
     hit(damage, owner) {
       if (this.introTimer > 0) return;
+      if (bossArena && bossArena.boss === this && !bossArena.combatReady) {
+        this.armorPulse = 0.12;
+        return;
+      }
       if (this.phaseShield > 0) {
         burst(rand(this.x, this.x + this.w), rand(this.y, this.y + this.h), this.profile.accent, 2, 85);
         return;
       }
       const armored = bossArena && bossArena.boss === this && bossArena.state === "fight" && this.vulnerableTimer <= 0 && !specialAttack;
-      const armorScale = [0.76, 0.64, 0.56, 0.50][menuDifficulty] ?? 0.64;
+      const armorScale = [0.50, 0.42, 0.34, 0.28][menuDifficulty] ?? 0.42;
       const appliedDamage = armored ? damage * armorScale : damage;
       if (armored) this.armorPulse = 0.14;
       this.health -= appliedDamage;
@@ -5573,7 +5669,7 @@
       this.arenaLock = true;
       this.bodyPitch = 0;
       this.stabilizers = 0;
-      this.attackTimer = Math.max(this.attackTimer, nextAttackDelay);
+      this.attackTimer = bossActionRecovery(nextAttackDelay);
     }
 
     draw() {
@@ -5735,7 +5831,7 @@
           this.baseY = action.returnY;
           this.x = action.returnX;
           this.y = action.returnY;
-          this.attackTimer = Math.max(this.attackTimer, 0.88);
+          this.attackTimer = bossActionRecovery(0.88);
         }
         return;
       }
@@ -5969,7 +6065,7 @@
       this.hidden = false;
       this.alpha = 1;
       this.y = terrainSurfaceY(this.cx) - this.h;
-      this.attackTimer = Math.max(this.attackTimer, delay);
+      this.attackTimer = bossActionRecovery(delay);
     }
 
     draw() {
@@ -6096,7 +6192,7 @@
           action.speed = 230;
         } else {
           this.iceAction = null;
-          this.attackTimer = Math.max(this.attackTimer, 0.92);
+          this.attackTimer = bossActionRecovery(0.92);
         }
       }
     }
@@ -6214,7 +6310,7 @@
       this.bodyLean = (this.bodyLean || 0) * Math.exp(-9 * dt);
       if (action.timer <= 0) {
         this.emperorAction = null;
-        this.attackTimer = Math.max(this.attackTimer, 0.88);
+        this.attackTimer = bossActionRecovery(0.88);
       }
     }
 
@@ -6296,7 +6392,7 @@
         checkpoint: this.finalEncounter ? 70612.5 : null
       };
       this.name = this.profile.name;
-      this.maxHealth = (this.finalEncounter ? 2850 : 540 + this.stage * 140) * enemyHealthScale(true);
+      this.maxHealth = (this.finalEncounter ? 2850 : 540 + this.stage * 140) * bossEncounterHealthScale();
       this.health = this.maxHealth;
       this.score = this.finalEncounter ? 24500 : 1100 + this.stage * 350;
       this.arenaLock = this.finalEncounter;
@@ -7495,6 +7591,76 @@
   }
 
 
+  class BossLaserBeam extends Entity {
+    constructor(left, right, groundY, lane, color, delay = 0.14, activeTime = 0.46, damage = 18) {
+      const beamHeight = lane === "high" ? 28 : 30;
+      const centerY = lane === "high" ? groundY - 69 : groundY - 27;
+      super(left, centerY - beamHeight * 0.5, Math.max(40, right - left), beamHeight);
+      this.left = left;
+      this.right = right;
+      this.groundY = groundY;
+      this.lane = lane === "high" ? "high" : "low";
+      this.color = color;
+      this.delay = delay;
+      this.activeTime = activeTime;
+      this.maxActive = activeTime;
+      this.damage = damage;
+      this.active = false;
+      this.hitPlayers = new Set();
+      this.phase = rand(0, Math.PI * 2);
+    }
+
+    update(dt) {
+      this.phase += dt * 18;
+      if (this.delay > 0) {
+        this.delay -= dt;
+        return;
+      }
+      this.active = true;
+      this.activeTime -= dt;
+      if (this.activeTime <= 0) this.dead = true;
+    }
+
+    isDangerous() { return this.active && !this.dead; }
+
+    damagePlayer(player) {
+      if (!(this.hitPlayers instanceof Set)) this.hitPlayers = new Set();
+      if (this.hitPlayers.has(player.index)) return;
+      this.hitPlayers.add(player.index);
+      const direction = player.cx < (this.left + this.right) * 0.5 ? -1 : 1;
+      player.hit(this.damage * enemyDamageScale(), direction);
+      player.knockbackX = direction * 180;
+      burst(player.cx, player.cy, this.color, 10, 185);
+      audio.impact(1.18, "energy");
+    }
+
+    draw() {
+      const pulse = 0.5 + Math.sin(this.phase) * 0.22;
+      ctx.save();
+      if (!this.active) {
+        ctx.globalAlpha = 0.34 + pulse * 0.20;
+        ctx.fillStyle = this.color;
+        ctx.fillRect(this.x, this.y + this.h * 0.42, this.w, Math.max(3, this.h * 0.16));
+        ctx.globalAlpha = 0.72;
+        ctx.fillStyle = "#fff6bd";
+        for (let x = this.x; x < this.x + this.w; x += 56) ctx.fillRect(x, this.y - 4, 28, 3);
+        ctx.restore();
+        return;
+      }
+      const life = clamp(this.activeTime / Math.max(0.001, this.maxActive), 0, 1);
+      ctx.globalAlpha = 0.26 + life * 0.22;
+      ctx.fillStyle = this.color;
+      ctx.fillRect(this.x, this.y - 10, this.w, this.h + 20);
+      ctx.globalAlpha = 0.88;
+      ctx.fillStyle = this.color;
+      ctx.fillRect(this.x, this.y, this.w, this.h);
+      ctx.globalAlpha = 0.96;
+      ctx.fillStyle = "#fffdf0";
+      ctx.fillRect(this.x, this.y + this.h * 0.35, this.w, this.h * 0.30);
+      ctx.restore();
+    }
+  }
+
   class RailSweeper extends Entity {
     constructor(startX, endX, groundY, direction, color, delay = 0.18, damage = 22) {
       const width = 230;
@@ -7534,6 +7700,7 @@
     isDangerous() { return this.started && !this.dead; }
 
     damagePlayer(player) {
+      if (!(this.hitPlayers instanceof Set)) this.hitPlayers = new Set();
       if (this.hitPlayers.has(player.index)) return;
       this.hitPlayers.add(player.index);
       player.hit(this.damage * enemyDamageScale(), this.direction);
@@ -7639,6 +7806,7 @@
     isDangerous() { return this.started && !this.dead; }
 
     damagePlayer(player) {
+      if (!(this.hitPlayers instanceof Set)) this.hitPlayers = new Set();
       if (this.hitPlayers.has(player.index)) return;
       this.hitPlayers.add(player.index);
       player.hit(this.damage * enemyDamageScale(), this.direction);
@@ -7730,6 +7898,7 @@
     isDangerous() { return this.active && !this.dead; }
 
     damagePlayer(player) {
+      if (!(this.hitPlayers instanceof Set)) this.hitPlayers = new Set();
       if (this.hitPlayers.has(player.index)) return;
       this.hitPlayers.add(player.index);
       player.hit(this.damage * enemyDamageScale(), player.cx < this.cx ? -1 : 1);
@@ -7901,6 +8070,7 @@
       if (!active) return;
 
       for (const player of players) {
+        if (!(this.hitPlayers instanceof Set)) this.hitPlayers = new Set();
         if (player.dead || this.hitPlayers.has(player.index)) continue;
 
         const dx = this.cx - player.cx;
@@ -8583,13 +8753,13 @@
       this.boss = boss;
       this.layout = BOSS_ARENA_LAYOUTS[boss.profile.form] || BOSS_ARENA_LAYOUTS.walker;
       this.major = Number.isInteger(boss.profile.levelEnd) || boss.profile.campaignFinal || boss.finalEncounter;
-      this.state = "fight";
+      this.state = "waiting";
       this.elapsed = 0;
       this.introDuration = 0;
       this.exitDuration = 0.72;
       this.cameraBlend = 0;
       this.gateBlend = 0;
-      this.combatReady = true;
+      this.combatReady = false;
       this.phaseRecovery = 0;
       this.phasePulse = 0;
       this.cleaned = false;
@@ -8598,6 +8768,7 @@
       this.covers = [];
       this.campPlatform = null;
       this.campTime = 0;
+      this.playerCampTimes = {};
       this.counterStrike = null;
       this.attackCommitPulse = 0;
 
@@ -8708,6 +8879,30 @@
       }
     }
 
+    playerInside(player, padding = 46) {
+      if (!player || player.dead) return false;
+      return player.cx >= this.left + padding && player.cx <= this.right - padding;
+    }
+
+    livingPlayersReady() {
+      const living = players.filter(player => player && !player.dead && player.lives > 0);
+      return living.length > 0 && living.every(player => this.playerInside(player));
+    }
+
+    beginFight() {
+      if (this.state === "fight") return;
+      this.state = "fight";
+      this.elapsed = 0;
+      this.gateBlend = 0;
+      this.combatReady = true;
+      if (this.boss && !this.boss.dead) {
+        this.boss.introTimer = Math.min(this.boss.introTimer, 0.18);
+        this.boss.attackTimer = Math.min(Math.max(this.boss.attackTimer, 0.58), 0.90);
+        this.boss.phaseShield = Math.max(this.boss.phaseShield, 0.48);
+      }
+      showBanner("BOSS ENGAGED", 0.75);
+    }
+
     onAttackCommitted() {
       this.attackCommitPulse = 1;
     }
@@ -8760,19 +8955,48 @@
 
       const strike = this.counterStrike;
       const damage = [12, 14, 17, 20][menuDifficulty] ?? 14;
+      const strikeRadius = strike.platform
+        ? Math.max(82, strike.platform.w * 0.62)
+        : Math.max(88, Number(strike.radius) || 102);
       hazards.push(new ArenaEruption(
         strike.x,
         "energy",
         this.boss.profile.accent,
         0.02,
         0.42,
-        Math.max(82, strike.platform.w * 0.62),
+        strikeRadius,
         390,
         damage
       ));
       blastEffects.push(new BlastEffect(strike.x, strike.y - 34, this.boss.profile.accent, 1));
       burst(strike.x, strike.y - 18, this.boss.profile.accent, 12, 175);
       this.counterStrike = null;
+    }
+
+    updateStationaryPressure(dt) {
+      const threshold = [2.75, 2.25, 1.85, 1.55][menuDifficulty] ?? 2.25;
+      for (const player of players) {
+        if (!this.playerInside(player, 24)) continue;
+        const key = String(player.index);
+        const camping = player.shotActivity > 0 && Math.abs(player.vx) < 42 && Math.abs(player.vy) < 34;
+        const previous = Number(this.playerCampTimes[key]) || 0;
+        const next = camping ? Math.min(threshold + 0.5, previous + dt) : Math.max(0, previous - dt * 2.0);
+        this.playerCampTimes[key] = next;
+        if (!this.counterStrike && next >= threshold) {
+          const strikeX = clamp(player.cx + player.vx * 0.18, this.left + 95, this.right - 95);
+          this.counterStrike = {
+            x: strikeX,
+            y: terrainSurfaceY(strikeX),
+            timer: 0.78,
+            maxTimer: 0.78,
+            platform: null,
+            radius: 102,
+            playerIndex: player.index
+          };
+          this.playerCampTimes[key] = 0;
+          audio.toneAt(132, 0.18, "sawtooth", 0.07, 220);
+        }
+      }
     }
 
     placeCombatants() {
@@ -8801,17 +9025,15 @@
       this.phasePulse = Math.max(0, this.phasePulse - dt * 1.8);
       for (const cover of this.covers) cover.update(dt, this.state);
 
-      if (this.state === "intro") {
-        // Backward-compatible network recovery from older snapshots. Promote
-        // directly to normal combat without replaying the removed transition.
-        this.state = "fight";
-        this.elapsed = 0;
-        this.combatReady = true;
-        if (this.boss && !this.boss.dead) {
-          this.boss.x = this.bossHomeX;
-          this.updateBossGrounding();
-          this.boss.introTimer = Math.min(this.boss.introTimer, 0.20);
-        }
+      if (this.state === "intro") this.state = "waiting";
+
+      if (this.state === "waiting") {
+        this.elapsed += dt;
+        this.cameraBlend = 0;
+        this.gateBlend = 0;
+        this.combatReady = false;
+        if (this.livingPlayersReady()) this.beginFight();
+        return;
       }
 
       if (this.state === "fight") {
@@ -8819,6 +9041,7 @@
         this.cameraBlend = 0;
         this.gateBlend = smoothStep(clamp(this.elapsed / 0.34, 0, 1));
         this.updatePlatformPressure(dt);
+        this.updateStationaryPressure(dt);
         if (this.phaseRecovery > 0) {
           this.phaseRecovery -= dt;
           this.combatReady = false;
@@ -8842,7 +9065,7 @@
     }
 
     onBossPhase(tier) {
-      this.phaseRecovery = tier >= 2 ? 1.05 : 0.82;
+      this.phaseRecovery = tier >= 2 ? 0.68 : 0.52;
       this.combatReady = false;
       this.phasePulse = 1;
       this.campTime = 0;
@@ -8867,7 +9090,7 @@
     }
 
     isLocked() {
-      return this.state !== "exit" && this.gateBlend > 0.18;
+      return this.state === "fight" && this.gateBlend > 0.18;
     }
 
     blockHostileProjectile(projectile) {
@@ -8891,6 +9114,7 @@
       this.counterStrike = null;
       this.campPlatform = null;
       this.campTime = 0;
+      this.playerCampTimes = {};
     }
 
     drawGate(x, ground, alpha, inward) {
@@ -8954,8 +9178,11 @@
         ctx.stroke();
         ctx.setLineDash([]);
         ctx.lineWidth = 5;
+        const markerRadius = strike.platform
+          ? strike.platform.w * 0.42 + pulse
+          : (Number(strike.radius) || 102) + pulse * 0.45;
         ctx.beginPath();
-        ctx.ellipse(strike.x, strike.y - 5, strike.platform.w * 0.42 + pulse, 18 + pulse * 0.18, 0, 0, Math.PI * 2);
+        ctx.ellipse(strike.x, strike.y - 5, markerRadius, 18 + pulse * 0.18, 0, 0, Math.PI * 2);
         ctx.stroke();
         ctx.restore();
       }
@@ -8990,7 +9217,7 @@
 
   const NETWORK_PROTOTYPES = () => ({
     Player, Enemy, Bullet, EnemyBullet, BossMissile, Pickup, FallingDebris,
-    SiegeMortar, RailSweeper, ClockworkSweeper, ArenaEruption, GravitySeed,
+    SiegeMortar, BossLaserBeam, RailSweeper, ClockworkSweeper, ArenaEruption, GravitySeed,
     GravityWell, TimeEcho, BossFlyby, Hazard, StageBoss, OmegaTank,
     AegisGunshipBoss, BioLeviathanBoss, FrostTitanBoss, ReignEmperorBoss,
     RivalHunter
@@ -9289,6 +9516,7 @@
       phaseRecovery: bossArena.phaseRecovery,
       phasePulse: bossArena.phasePulse,
       campTime: bossArena.campTime,
+      playerCampTimes: bossArena.playerCampTimes,
       attackCommitPulse: bossArena.attackCommitPulse,
       platforms: bossArena.platforms.map(platform => ({
         y: platform.y, targetY: platform.targetY, delay: platform.delay,
@@ -9315,7 +9543,7 @@
       if (bossRow) restoreNetworkObject(bossRow, activeBoss);
     }
     bossArena.boss = activeBoss;
-    for (const key of ["state", "elapsed", "left", "right", "width", "center", "entryX", "bossHomeX", "cameraBlend", "gateBlend", "combatReady", "phaseRecovery", "phasePulse", "campTime", "attackCommitPulse"]) {
+    for (const key of ["state", "elapsed", "left", "right", "width", "center", "entryX", "bossHomeX", "cameraBlend", "gateBlend", "combatReady", "phaseRecovery", "phasePulse", "campTime", "playerCampTimes", "attackCommitPulse"]) {
       if (state[key] !== undefined) bossArena[key] = state[key];
     }
     activeBoss.arenaLeft = bossArena.left;
@@ -9343,6 +9571,8 @@
       clock: time,
       simulationX: simulationView.left,
       simulationY: simulationView.top,
+      simulationW: simulationView.width,
+      simulationH: simulationView.height,
       campaignLevel,
       checkpointX,
       levelState,
@@ -9371,6 +9601,8 @@
     if (Number.isFinite(snapshot.clock)) net.clockTarget = snapshot.clock;
     if (Number.isFinite(snapshot.simulationX)) net.simulationX = snapshot.simulationX;
     if (Number.isFinite(snapshot.simulationY)) net.simulationY = snapshot.simulationY;
+    if (Number.isFinite(snapshot.simulationW)) net.simulationW = snapshot.simulationW;
+    if (Number.isFinite(snapshot.simulationH)) net.simulationH = snapshot.simulationH;
     if (Number.isFinite(snapshot.randomState)) gameRandomState = Number(snapshot.randomState) >>> 0;
     if (Number.isFinite(snapshot.entityCounter)) networkEntityCounter = Math.max(1, Number(snapshot.entityCounter) | 0);
     if (Number.isFinite(snapshot.checkpointX)) checkpointX = snapshot.checkpointX;
@@ -9444,6 +9676,8 @@
     net.droppedStatePackets = 0;
     net.simulationX = null;
     net.simulationY = null;
+    net.simulationW = null;
+    net.simulationH = null;
     onlineMenuOpen = false;
     if (!preserveRoom) net.roomCode = "";
     net.manualClose = false;
@@ -11383,7 +11617,8 @@
     }
 
     ctx.save();
-    ctx.globalAlpha = 0.68;
+    ctx.globalAlpha = 0.38;
+    ctx.filter = "saturate(25%) brightness(58%) contrast(68%)";
 
     for (const star of stars) {
       if (star.x < cameraX - 100 || star.x > cameraX + visibleWorldW + 100) continue;
@@ -11424,13 +11659,14 @@
 
     // A soft atmospheric veil keeps animated scenery behind enemies, bullets,
     // hazards, and traversal geometry.
-    ctx.fillStyle = "rgba(5,8,12,.18)";
+    ctx.fillStyle = "rgba(5,8,12,.44)";
     ctx.fillRect(skyX, top, skyW, Math.max(0, GROUND_Y - top));
 
     drawTerrain(bottom);
 
     ctx.save();
-    ctx.globalAlpha = 0.72;
+    ctx.globalAlpha = 0.32;
+    ctx.filter = "saturate(24%) brightness(56%) contrast(66%)";
     for (const decoration of decorations) {
       if (decoration.x > cameraX - 200 && decoration.x < cameraX + visibleWorldW + 200) drawDecoration(decoration);
     }
@@ -11463,22 +11699,22 @@
         ctx.fillRect(x, y - 70 - Math.sin(time + i) * 12, 34, 78);
         ctx.fillRect(x - 15, y - 105 - Math.sin(time * .8 + i) * 15, 64, 38);
         ctx.globalAlpha = 1;
-        ctx.fillStyle = "#ff6a42"; ctx.fillRect(x + 7, y, 20, 22);
-        ctx.fillStyle = "#fff36d"; ctx.fillRect(x + 11, y - 7, 12, 16);
+        ctx.fillStyle = "#855e52"; ctx.fillRect(x + 7, y, 20, 22);
+        ctx.fillStyle = "#8f8964"; ctx.fillRect(x + 11, y - 7, 12, 16);
       }
     } else if (zone === 1) {
       // Searchlights, cloud traffic and neon fighter silhouettes.
       for (let i = 0; i < 5; i++) {
         const baseX = cameraX + 140 + i * 380;
         ctx.globalAlpha = 0.12;
-        bossPolygon([[baseX, 680],[baseX + 55, 680],[baseX + 220 + Math.sin(time + i) * 80, 120]], i % 2 ? "#ff5ed7" : "#59ecff");
+        bossPolygon([[baseX, 680],[baseX + 55, 680],[baseX + 220 + Math.sin(time + i) * 80, 120]], i % 2 ? "#775b78" : "#5c7780");
       }
       ctx.globalAlpha = 1;
       for (let i = 0; i < 7; i++) {
         const travel = (time * (150 + i * 12) + i * 430) % (visibleWorldW + 520);
         const x = left + travel;
         const y = 135 + (i % 4) * 72;
-        const color = i % 2 ? "#ff5ed7" : "#59ecff";
+        const color = i % 2 ? "#775b78" : "#5c7780";
         ctx.fillStyle = color;
         ctx.beginPath();
         ctx.moveTo(x + 42, y);
@@ -11498,13 +11734,13 @@
       for (let i = 0; i < 26; i++) {
         const x = left + ((i * 211 - time * (35 + i % 4 * 12)) % (visibleWorldW + 360) + (visibleWorldW + 360)) % (visibleWorldW + 360);
         const y = 50 + (i * 83 % 500);
-        ctx.fillStyle = i % 3 ? "#d8fff0" : "#69ffb0"; ctx.fillRect(x, y, 20 + i % 4 * 8, 3);
+        ctx.fillStyle = i % 3 ? "#d8fff0" : "#607a69"; ctx.fillRect(x, y, 20 + i % 4 * 8, 3);
       }
       const sx = cameraX + visibleWorldW * 0.20;
       const sy = 260;
       ctx.save(); ctx.translate(sx, sy); ctx.rotate(time * 0.14);
       ctx.strokeStyle = "#586a9d"; ctx.lineWidth = 12; ctx.beginPath(); ctx.arc(0,0,125,0,Math.PI*2); ctx.stroke();
-      ctx.strokeStyle = "#69ffb0"; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(0,0,92,0,Math.PI*2); ctx.stroke();
+      ctx.strokeStyle = "#607a69"; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(0,0,92,0,Math.PI*2); ctx.stroke();
       ctx.fillStyle = "#1c2445"; ctx.fillRect(-28,-155,56,310); ctx.fillRect(-155,-28,310,56);
       ctx.restore();
     } else if (zone === 3) {
@@ -11512,39 +11748,39 @@
       for (let i = 0; i < 24; i++) {
         const x = left + ((i * 157 + Math.sin(time * .7 + i) * 70) % (visibleWorldW + 360));
         const y = 90 + (i * 61 % 500) + Math.sin(time * 1.4 + i) * 18;
-        ctx.fillStyle = i % 3 ? "#8dff5d" : "#ffd75e";
+        ctx.fillStyle = i % 3 ? "#66785c" : "#80765c";
         ctx.fillRect(x, y, 6 + i % 3 * 3, 6 + i % 3 * 3);
       }
       for (let i = 0; i < 5; i++) {
         const x = cameraX + 130 + i * 410 - (cameraX * .18 % 410);
         ctx.strokeStyle = i % 2 ? "#315d2f" : "#21462a"; ctx.lineWidth = 30;
         ctx.beginPath(); ctx.moveTo(x, 760); ctx.quadraticCurveTo(x - 130, 410, x + 40, 150); ctx.stroke();
-        ctx.fillStyle = "#b7ff61"; ctx.fillRect(x + 21, 235 + i * 13, 12, 8);
+        ctx.fillStyle = "#718064"; ctx.fillRect(x + 21, 235 + i * 13, 12, 8);
       }
     } else if (zone === 4) {
       // Aurora bands, heavy snow and a distant moving maglev train.
       for (let i = 0; i < 5; i++) {
         ctx.globalAlpha = 0.10 + i * 0.025;
-        ctx.strokeStyle = i % 2 ? "#b589ff" : "#7cfff2"; ctx.lineWidth = 22;
+        ctx.strokeStyle = i % 2 ? "#726b80" : "#607b79"; ctx.lineWidth = 22;
         ctx.beginPath(); ctx.moveTo(left, 100 + i * 42); ctx.quadraticCurveTo(cameraX + visibleWorldW * .45, 35 + i * 65 + Math.sin(time*.4+i)*35, right, 130 + i * 36); ctx.stroke();
       }
       ctx.globalAlpha = 1;
       for (let i = 0; i < 34; i++) {
         const x = left + ((i * 101 - time * (80 + i % 5 * 13)) % (visibleWorldW + 360) + visibleWorldW + 360) % (visibleWorldW + 360);
         const y = 40 + ((i * 73 + time * 55) % 590);
-        ctx.fillStyle = "#e9fdff"; ctx.fillRect(x, y, 4 + i % 3 * 2, 4 + i % 2 * 2);
+        ctx.fillStyle = "#879497"; ctx.fillRect(x, y, 4 + i % 3 * 2, 4 + i % 2 * 2);
       }
       const trainX = left + ((time * 210) % (visibleWorldW + 900)) - 300;
       ctx.fillStyle = "#17334a"; ctx.fillRect(trainX, 480, 520, 58);
-      ctx.fillStyle = "#8ff7ff"; ctx.fillRect(trainX + 25, 492, 440, 10);
-      for (let i = 0; i < 7; i++) { ctx.fillStyle = "#d6fbff"; ctx.fillRect(trainX + 42 + i * 62, 510, 35, 14); }
+      ctx.fillStyle = "#6c8589"; ctx.fillRect(trainX + 25, 492, 440, 10);
+      for (let i = 0; i < 7; i++) { ctx.fillStyle = "#889497"; ctx.fillRect(trainX + 42 + i * 62, 510, 35, 14); }
     } else {
       // Rotating clockwork, broken floating masonry and time streams.
       for (let i = 0; i < 7; i++) {
         const x = cameraX + 100 + i * 270 - (cameraX * .22 % 270);
         const y = 140 + (i % 3) * 145;
         ctx.save(); ctx.translate(x,y); ctx.rotate(time * (i % 2 ? -0.22 : 0.18));
-        ctx.strokeStyle = i % 2 ? "#ff8df4" : "#ffd75e"; ctx.lineWidth = 7;
+        ctx.strokeStyle = i % 2 ? "#7c647b" : "#80765c"; ctx.lineWidth = 7;
         ctx.beginPath(); ctx.arc(0,0,45 + (i%3)*12,0,Math.PI*2); ctx.stroke();
         for (let a = 0; a < 8; a++) { ctx.rotate(Math.PI/4); ctx.fillStyle = "#44255f"; ctx.fillRect(35,-6,24,12); }
         ctx.restore();
@@ -11552,11 +11788,11 @@
       for (let i = 0; i < 18; i++) {
         const x = left + ((i * 193 + Math.sin(time + i) * 90) % (visibleWorldW + 360));
         const y = 70 + (i * 89 % 560) + Math.sin(time * 0.8 + i) * 24;
-        ctx.fillStyle = i % 2 ? "#ff8df4" : "#ffd75e"; ctx.fillRect(x, y, 11 + i % 3 * 6, 8 + i % 2 * 5);
+        ctx.fillStyle = i % 2 ? "#7c647b" : "#80765c"; ctx.fillRect(x, y, 11 + i % 3 * 6, 8 + i % 2 * 5);
       }
       if (chronoPulse > 0) {
         ctx.globalAlpha = 0.18 + chronoPulse * 0.08;
-        ctx.strokeStyle = "#ff8df4"; ctx.lineWidth = 5;
+        ctx.strokeStyle = "#7c647b"; ctx.lineWidth = 5;
         for (let i = 0; i < 5; i++) { ctx.beginPath(); ctx.arc(cameraX + visibleWorldW*.5, cameraY + visibleWorldH*.5, 130 + i*90 + Math.sin(time*3+i)*18, 0, Math.PI*2); ctx.stroke(); }
       }
     }
@@ -11604,7 +11840,7 @@
       const h = 150 + (i * 83 % 260);
       ctx.fillStyle = i % 2 ? "#171735" : "#20204a";
       ctx.fillRect(x, GROUND_Y - h, 185, h);
-      ctx.fillStyle = i % 3 ? "#4fe3ff" : "#ff5ed7";
+      ctx.fillStyle = i % 3 ? "#4fe3ff" : "#775b78";
       for (let y = GROUND_Y - h + 24; y < GROUND_Y - 30; y += 42) ctx.fillRect(x + 22, y, 130, 6);
       ctx.fillStyle = "#0e1224";
       ctx.fillRect(x + 60, GROUND_Y - h - 48, 14, 48);
@@ -11629,7 +11865,7 @@
       const h = 120 + (i * 67 % 240);
       ctx.fillStyle = i % 2 ? "#15142a" : "#1c1a35";
       ctx.fillRect(x, GROUND_Y - h, 170, h);
-      ctx.fillStyle = "#69ffb0";
+      ctx.fillStyle = "#607a69";
       ctx.fillRect(x + 18, GROUND_Y - h + 22, 8, h - 45);
       ctx.fillStyle = "#8b5cff";
       ctx.fillRect(x + 142, GROUND_Y - h + 35, 8, h - 70);
@@ -11648,7 +11884,7 @@
       ctx.fillRect(x + 72, GROUND_Y - h, 62, h);
       ctx.fillStyle = "#315d2f";
       ctx.fillRect(x, GROUND_Y - h + 55, 205, 32);
-      ctx.fillStyle = i % 3 ? "#8dff5d" : "#b7ff61";
+      ctx.fillStyle = i % 3 ? "#66785c" : "#718064";
       ctx.fillRect(x + 88, GROUND_Y - h + 24, 28, 20);
       ctx.fillRect(x + 24, GROUND_Y - h + 64, 26, 12);
       ctx.fillRect(x + 155, GROUND_Y - h + 64, 26, 12);
@@ -11674,7 +11910,7 @@
       ctx.fillStyle = "#142a3a";
       ctx.fillRect(x + 70, GROUND_Y - h - 48, 40, 48);
     }
-    ctx.fillStyle = "#8ff7ff";
+    ctx.fillStyle = "#6c8589";
     ctx.fillRect(cameraX - 100, 590, visibleWorldW + 200, 8);
     ctx.fillStyle = "#1a3547";
     ctx.fillRect(cameraX - 100, 604, visibleWorldW + 200, 14);
@@ -11695,10 +11931,10 @@
       const h = 160 + (i * 79 % 280);
       ctx.fillStyle = i % 2 ? "#25143a" : "#321b49";
       ctx.fillRect(x + 40, GROUND_Y - h, 135, h);
-      ctx.fillStyle = "#ff8df4";
+      ctx.fillStyle = "#7c647b";
       ctx.fillRect(x + 57, GROUND_Y - h + 25, 8, h - 50);
       ctx.fillRect(x + 150, GROUND_Y - h + 38, 8, h - 75);
-      ctx.fillStyle = "#ffd75e";
+      ctx.fillStyle = "#80765c";
       ctx.fillRect(x + 94, GROUND_Y - h - 42, 28, 42);
     }
     ctx.save();
@@ -12629,7 +12865,7 @@
     ctx.fillStyle = UI_THEME.muted;
     ctx.font = `700 ${7 * scale}px ${UI_FONT}`;
     ctx.textAlign = "right";
-    ctx.fillText("v8.6.0 ONLINE", x + panelW - 8 * scale, y + panelH - 7 * scale);
+    ctx.fillText("v8.7.0 ONLINE", x + panelW - 8 * scale, y + panelH - 7 * scale);
   }
 
 
@@ -12888,7 +13124,7 @@
     ctx.fillStyle = UI_THEME.muted;
     ctx.font = `700 ${7 * scale}px ${UI_FONT}`;
     ctx.textAlign = "right";
-    ctx.fillText("v8.6.0 ONLINE", x + panelW - 8 * scale, y + panelH - 7 * scale);
+    ctx.fillText("v8.7.0 ONLINE", x + panelW - 8 * scale, y + panelH - 7 * scale);
   }
 
   function drawCharacterPreview(profile, cx, cy, scale, selected = false) {
@@ -13053,7 +13289,7 @@
     ctx.fillStyle = UI_THEME.muted;
     ctx.font = `700 ${7 * scale}px ${UI_FONT}`;
     ctx.textAlign = "right";
-    ctx.fillText("v8.6.0 ONLINE", x + panelW - 8 * scale, y + panelH - 7 * scale);
+    ctx.fillText("v8.7.0 ONLINE", x + panelW - 8 * scale, y + panelH - 7 * scale);
   }
 
   function drawCanvasMenu() {
