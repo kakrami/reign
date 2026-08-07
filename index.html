@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>Iron Reign: Urban Assault v8.4.0 Online</title>
+<title>Iron Reign: Urban Assault v8.5.0 Online</title>
 <style>
   :root {
     --safe-top: env(safe-area-inset-top, 0px);
@@ -43,7 +43,7 @@
 (() => {
   "use strict";
 
-  // IRON REIGN ONLINE v8.4.0 MULTIPLAYER SMOOTHING
+  // IRON REIGN ONLINE v8.5.0 BOSS FLOW AND VISUAL CLARITY
 
   const canvas = document.getElementById("game");
   const ctx = canvas.getContext("2d", { alpha: false });
@@ -80,7 +80,7 @@
   });
 
   const MULTIPLAYER_PROTOCOL = 1;
-  const MULTIPLAYER_VERSION = "iron-reign-online-8.4.0";
+  const MULTIPLAYER_VERSION = "iron-reign-online-8.5.0";
   const ROOM_CODE_LENGTH = 5;
   const MAX_ONLINE_PLAYERS = 4;
   const ONLINE_API = ["localhost", "127.0.0.1"].includes(location.hostname)
@@ -385,7 +385,7 @@
     },
     reignEmperor: {
       name: "IRON REIGN EMPEROR", form: "emperor", w: 340, h: 325,
-      health: 3150, score: 36000, cadence: 2.35,
+      health: 3150, score: 36000, cadence: 1.55,
       color: "#3b2633", accent: "#ffd75e", attacks: ["phaseDash", "gearWall", "echoes", "missiles", "nova", "phaseDash", "gearWall"],
       campaignFinal: true
     },
@@ -589,13 +589,17 @@
 
   function bossPressureScore(boss) {
     if (!boss) return 0;
-    const dynamicHazards = hazards.reduce((count, hazard) => count + (!hazard.dead && !(hazard instanceof Hazard) ? 1 : 0), 0);
-    const summons = enemies.reduce((count, enemy) => count + (!enemy.dead && enemy.x > boss.arenaLeft && enemy.x < boss.arenaRight ? 1 : 0), 0);
-    return enemyBullets.length + dynamicHazards * 4 + summons * 3;
+    const inside = object => !object.dead && object.x + object.w >= boss.arenaLeft && object.x <= boss.arenaRight;
+    const activeProjectiles = enemyBullets.reduce((count, bullet) => count + (inside(bullet) ? 1 : 0), 0);
+    const dynamicHazards = hazards.reduce((count, hazard) => count + (inside(hazard) && !(hazard instanceof Hazard) ? 1 : 0), 0);
+    const summons = enemies.reduce((count, enemy) => count + (inside(enemy) ? 1 : 0), 0);
+    // Projectiles are cheap and short-lived. Persistent hazards and summons use
+    // more of the encounter budget, but the budget only affects pattern choice.
+    return activeProjectiles * 0.45 + dynamicHazards * 2.25 + summons * 1.75;
   }
 
   function bossPressureLimit() {
-    return [10, 15, 23, 32][menuDifficulty] ?? 15;
+    return [12, 17, 24, 32][menuDifficulty] ?? 17;
   }
 
   function pruneDead(list) {
@@ -883,11 +887,10 @@
   }
 
   function cameraWorldBounds(viewWidth = visibleWorldW) {
-    const worldMaximum = Math.max(0, LEVEL_W - viewWidth);
-    if (bossArena && typeof bossArena.cameraBounds === "function") {
-      return bossArena.cameraBounds(viewWidth);
-    }
-    return { min: 0, max: worldMaximum };
+    // Boss encounters use the same world camera rules as regular gameplay.
+    // Arena gates constrain players, not the camera, so entering a fight never
+    // snaps, recenters, or zooms the local view.
+    return { min: 0, max: Math.max(0, LEVEL_W - viewWidth) };
   }
 
   function setCameraPosition(x, y) {
@@ -966,8 +969,7 @@
     const previousZoom = clamp(previousViewWidth / previousBaseWidth, 0.82, 1.35);
     let nextZoom = previousZoom;
     if (!running || levelState === "menu") nextZoom = 1;
-    if (bossArena) nextZoom = bossArena.targetViewWidth() / baseVisibleWorldW;
-    else if (victoryScene) nextZoom = 1.06;
+    if (victoryScene) nextZoom = 1.06;
     visibleWorldW = clamp(baseVisibleWorldW * nextZoom, 620, LEVEL_W);
     viewScale = canvas.width / visibleWorldW;
     visibleWorldH = canvas.height / viewScale;
@@ -991,10 +993,9 @@
 
   function updateWorldView(dt) {
     let targetWidth = baseVisibleWorldW;
-    if (bossArena) targetWidth = bossArena.targetViewWidth();
-    else if (victoryScene) targetWidth = baseVisibleWorldW * 1.06;
+    if (victoryScene) targetWidth = baseVisibleWorldW * 1.06;
 
-    const response = bossArena ? (bossArena.state === "intro" ? 2.8 : 4.2) : 4.8;
+    const response = 4.8;
     const blend = 1 - Math.exp(-response * dt);
     visibleWorldW += (targetWidth - visibleWorldW) * blend;
     if (Math.abs(targetWidth - visibleWorldW) < 0.05) visibleWorldW = targetWidth;
@@ -4408,6 +4409,8 @@
     devour: "pursuit",
     iceCharge: "pursuit",
     phaseDash: "pursuit",
+    gearWall: "mid",
+    echoes: "mid",
     roots: "ranged",
     rootWall: "ranged",
     iceField: "ranged"
@@ -4431,6 +4434,20 @@
   const BOSS_GROUND_ONLY_ATTACKS = new Set([
     "stomp", "crush", "ram", "burrow", "devour", "iceCharge", "phaseDash"
   ]);
+
+  const BOSS_ATTACK_FOOTPRINT = Object.freeze({
+    summon: 8, deploy: 8, echoes: 7,
+    gearWall: 7, rootWall: 7, iceField: 7, gravity: 7,
+    rain: 6, debris: 6, mortar: 6, bombRun: 6, avalanche: 6,
+    missiles: 5, spiral: 5, nova: 5, laser: 5, cross: 5,
+    fan: 4, horizontal: 4, wave: 4, roots: 4,
+    stomp: 2, crush: 2, ram: 2, railRush: 2,
+    swoop: 2, burrow: 2, devour: 2, iceCharge: 2, phaseDash: 1
+  });
+
+  function bossAttackFootprint(name) {
+    return BOSS_ATTACK_FOOTPRINT[name] ?? 4;
+  }
 
   function bossAttackRole(name) {
     if (BOSS_ATTACK_ROLE_OVERRIDES[name]) return BOSS_ATTACK_ROLE_OVERRIDES[name];
@@ -4653,6 +4670,9 @@
       this.armorPulse = 0;
       this.comboTimer = 0;
       this.comboAttackName = null;
+      this.lastAttackName = null;
+      this.attackSilence = 0;
+      this.stationaryTargetTime = 0;
       this.facing = -1;
       this.cameraBlend = 0;
       this.arenaLock = "arena";
@@ -4705,9 +4725,14 @@
 
     attackSuitability(name, target = this.target()) {
       const role = bossAttackRole(name);
-      if (role === "pursuit") return this.targetIsElevated(target) && BOSS_GROUND_ONLY_ATTACKS.has(name) ? 3 : 0;
-      const order = { close: 0, mid: 1, ranged: 2 };
       const targetBand = this.targetRangeBand(target);
+      if (role === "pursuit") {
+        if (this.targetIsElevated(target) && BOSS_GROUND_ONLY_ATTACKS.has(name)) return 4;
+        // Pursuit closes space. It is strongest at range, acceptable at mid
+        // distance, and deliberately weaker when already beside the player.
+        return targetBand === "ranged" ? 0 : targetBand === "mid" ? 0.65 : 1.6;
+      }
+      const order = { close: 0, mid: 1, ranged: 2 };
       let score = Math.abs((order[role] ?? 1) - (order[targetBand] ?? 1));
       if (role === "close" && targetBand === "ranged") score += 3;
       if (role === "ranged" && targetBand === "close") score += 1;
@@ -4723,21 +4748,50 @@
       const attacks = this.profile.attacks || [];
       if (!attacks.length) return scheduledAttack;
       const target = this.target();
+      const scheduledAllowed = !(skipSummon && scheduledAttack === "summon") && scheduledAttack !== previousName;
+      const scheduledScore = this.attackSuitability(scheduledAttack, target);
+
+      // Keep the authored rotation whenever the scheduled attack is sensible.
+      // Search for a substitute only when it is clearly wrong for the range,
+      // elevation, or repetition state.
+      if (scheduledAllowed && scheduledScore <= 1.1) return scheduledAttack;
+
       let bestName = scheduledAttack;
       let bestScore = Infinity;
-
       for (let offset = 0; offset < attacks.length; offset++) {
         const candidate = attacks[(attackIndex + offset) % attacks.length];
         if (skipSummon && candidate === "summon") continue;
         if (candidate === previousName && attacks.length > 1) continue;
-        const score = this.attackSuitability(candidate, target);
+        const score = this.attackSuitability(candidate, target) + offset * 0.04;
         if (score < bestScore) {
           bestName = candidate;
           bestScore = score;
-          if (score === 0 && offset === 0) break;
         }
       }
       return bestName;
+    }
+
+    selectAttackWithinBudget(scheduledAttack, attackIndex, pressure, previousName = null) {
+      const attacks = this.profile.attacks || [];
+      if (!attacks.length) return scheduledAttack;
+      const available = Math.max(1, bossPressureLimit() - pressure);
+      const target = this.target();
+      let bestName = null;
+      let bestScore = Infinity;
+
+      for (let offset = 0; offset < attacks.length; offset++) {
+        const candidate = attacks[(attackIndex + offset) % attacks.length];
+        if (candidate === previousName && attacks.length > 1) continue;
+        const footprint = bossAttackFootprint(candidate);
+        const overBudget = Math.max(0, footprint - available);
+        const suitability = this.attackSuitability(candidate, target);
+        const score = suitability * 5 + overBudget * 3 + footprint * 0.08 + offset * 0.02;
+        if (score < bestScore) {
+          bestName = candidate;
+          bestScore = score;
+        }
+      }
+      return bestName || scheduledAttack;
     }
 
     updatePassiveState(dt, faceTarget = true) {
@@ -4800,24 +4854,41 @@
         }
       }
 
+      const targetMoving = target ? Math.abs(target.vx) + Math.abs(target.vy) : 999;
+      const targetFiring = target ? target.shotActivity > 0 : false;
+      this.stationaryTargetTime = targetMoving < 42 && targetFiring
+        ? Math.min(8, this.stationaryTargetTime + dt)
+        : Math.max(0, this.stationaryTargetTime - dt * 1.8);
+      this.attackSilence += dt;
+      const silenceLimit = this.profile.campaignFinal ? 3.6 : 4.8;
+      if (this.attackSilence >= silenceLimit) this.attackTimer = Math.min(this.attackTimer, 0);
       this.attackTimer -= dt;
       if (this.attackTimer <= 0) {
-        if (bossPressureScore(this) > bossPressureLimit()) {
-          this.attackTimer = menuDifficulty <= 1 ? 0.34 : 0.22;
-        } else {
-          const scheduledAttack = this.profile.attacks[this.attackMode % this.profile.attacks.length];
-          const attackName = this.selectAttackForTarget(scheduledAttack, this.attackMode);
-          this.attackMode++;
-          this.beginBossAttack(attackName, false);
-          const baseCadence = this.profile.cadence || (2.92 - Math.min(0.58, campaignLevel * 0.11));
-          const tierPressure = this.combatTier * difficulty.tierPressure;
-          const levelPressure = campaignLevel * difficulty.levelPressure;
-          const recoveryWindow = menuDifficulty <= 1 ? 0.24 : menuDifficulty === 2 ? 0.10 : 0;
-          this.attackTimer = Math.max(
-            difficulty.bossMinInterval,
-            (baseCadence - tierPressure - levelPressure) * enemyCadenceScale(true) + recoveryWindow
-          );
+        const scheduledAttack = this.profile.attacks[this.attackMode % this.profile.attacks.length];
+        const pressure = bossPressureScore(this);
+        let attackName = pressure > bossPressureLimit()
+          ? this.selectAttackWithinBudget(scheduledAttack, this.attackMode, pressure, this.lastAttackName)
+          : this.selectAttackForTarget(scheduledAttack, this.attackMode, this.lastAttackName);
+
+        // A stationary firing player should provoke movement or arena pressure,
+        // not be allowed to hold the trigger against an idle boss.
+        if (this.stationaryTargetTime >= 2.2) {
+          const pressureAttack = this.selectAttackWithinBudget(scheduledAttack, this.attackMode + 1, pressure - 3, this.lastAttackName);
+          if (["pursuit", "ranged"].includes(bossAttackRole(pressureAttack))) attackName = pressureAttack;
+          this.stationaryTargetTime = 0;
         }
+
+        this.attackMode++;
+        this.beginBossAttack(attackName, false);
+        const baseCadence = this.profile.cadence || (2.92 - Math.min(0.58, campaignLevel * 0.11));
+        const tierPressure = this.combatTier * difficulty.tierPressure;
+        const levelPressure = campaignLevel * difficulty.levelPressure;
+        const recoveryWindow = menuDifficulty <= 1 ? 0.18 : menuDifficulty === 2 ? 0.08 : 0;
+        const pressureDelay = pressure > bossPressureLimit() ? 0.12 : 0;
+        this.attackTimer = Math.max(
+          difficulty.bossMinInterval,
+          (baseCadence - tierPressure - levelPressure) * enemyCadenceScale(true) + recoveryWindow + pressureDelay
+        );
       }
 
       for (const player of players) {
@@ -4919,6 +4990,8 @@
 
       const entry = this.attackDefinition(name);
       entry[0]();
+      this.lastAttackName = name;
+      this.attackSilence = 0;
       this.clearTelegraph();
       this.vulnerableTimer = Math.max(this.vulnerableTimer, combo ? 0.58 : 1.02 + this.combatTier * 0.10);
       if (bossArena && bossArena.boss === this) bossArena.onAttackCommitted();
@@ -8510,13 +8583,13 @@
       this.boss = boss;
       this.layout = BOSS_ARENA_LAYOUTS[boss.profile.form] || BOSS_ARENA_LAYOUTS.walker;
       this.major = Number.isInteger(boss.profile.levelEnd) || boss.profile.campaignFinal || boss.finalEncounter;
-      this.state = "intro";
+      this.state = "fight";
       this.elapsed = 0;
-      this.introDuration = this.major ? 1.82 : 1.58;
-      this.exitDuration = 1.05;
+      this.introDuration = 0;
+      this.exitDuration = 0.72;
       this.cameraBlend = 0;
       this.gateBlend = 0;
-      this.combatReady = false;
+      this.combatReady = true;
       this.phaseRecovery = 0;
       this.phasePulse = 0;
       this.cleaned = false;
@@ -8551,28 +8624,24 @@
         this.left + this.width * 0.57,
         this.right - boss.w - 58
       );
-      this.bossEntryX = this.right + (boss.profile.floating ? 170 : 80);
+      this.bossEntryX = this.bossHomeX;
       this.bossStartY = boss.y;
 
       boss.arenaLeft = this.left;
       boss.arenaRight = this.right;
       boss.arenaLock = "arena";
       boss.cameraBlend = 0;
-      boss.introTimer = Math.max(boss.introTimer, this.introDuration);
-      boss.attackTimer = Math.max(boss.attackTimer, 1.55);
-      boss.x = this.bossEntryX;
+      boss.introTimer = Math.min(boss.introTimer, 0.42);
+      boss.attackTimer = Math.min(Math.max(boss.attackTimer, 0.72), 1.05);
+      boss.x = this.bossHomeX;
       this.updateBossGrounding();
 
       if ("homeX" in boss) boss.homeX = this.bossHomeX;
       if ("baseX" in boss && boss.finalEncounter) boss.baseX = this.bossHomeX;
 
-      for (const platform of platforms) {
-        if (platform.arenaOwned || platform.dead) continue;
-        if (platform.x + platform.w < this.left + 24 || platform.x > this.right - 24) continue;
-        platform.arenaSuppressed = true;
-        this.suppressedPlatforms.push(platform);
-      }
-
+      // The arena reuses the existing level geometry. Suppressing platforms or
+      // deploying replacement geometry caused visible clipping and position
+      // corrections when the encounter started.
       this.createArenaObjects();
     }
 
@@ -8631,18 +8700,6 @@
     }
 
     createArenaObjects() {
-      let index = 0;
-      for (const [share, height, widthShare] of this.layout.platforms) {
-        const width = clamp(this.width * widthShare, 140, 225);
-        const x = clamp(this.left + this.width * share - width * 0.5, this.left + 80, this.right - width - 190);
-        const localGround = terrainSurfaceY(x + width * 0.5);
-        if (!Number.isFinite(localGround)) continue;
-        const platform = new ArenaPlatform(x, localGround - height, width, this.boss.profile.accent, 0.16 + index * 0.10);
-        platforms.push(platform);
-        this.platforms.push(platform);
-        index++;
-      }
-
       const coverShares = this.layout.cover > 1 ? [0.30, 0.54] : [0.34];
       for (let i = 0; i < Math.min(this.layout.cover, coverShares.length); i++) {
         const x = this.left + this.width * coverShares[i];
@@ -8720,35 +8777,15 @@
 
     placeCombatants() {
       checkpointX = Math.max(checkpointX, this.entryX);
-      let slot = 0;
       for (const player of players) {
         if (player.dead) continue;
-        const minimum = this.left + 66;
-        const maximum = Math.max(minimum + 120, Math.min(
-          this.right - player.w - 120,
-          this.bossHomeX - player.w - 170
-        ));
-        const currentCenter = player.x + player.w * 0.5;
-        const currentGround = terrainGroundY(currentCenter);
-        const standingOnSuppressedPlatform = Boolean(player.supportPlatform && player.supportPlatform.arenaSuppressed);
-        const outsideSafeEntry = player.x < minimum || player.x > maximum;
-        const unsafeGround = !Number.isFinite(currentGround);
-        if (outsideSafeEntry || unsafeGround || standingOnSuppressedPlatform) {
-          const preferred = findSafeRespawnX(this.entryX + slot * 62, player.w, minimum, maximum);
-          placePlayerOnSafeGround(player, preferred, minimum, maximum);
-          player.vx = 0;
-          player.vy = 0;
-          player.onGround = true;
-        }
+        // Preserve the exact position, velocity, support platform, and camera
+        // relationship the player had while walking into the encounter.
         player.health = Math.max(player.health, difficulty.bossHealthFloor);
         player.specials = Math.max(player.specials, difficulty.bossSpecialFloor);
-        player.invuln = Math.max(player.invuln, 2.25);
-        player.entryTimer = Math.max(player.entryTimer, 0.55);
-        player.supportPlatform = null;
-        slot++;
+        player.invuln = Math.max(player.invuln, 0.55);
       }
-      enemyBullets = [];
-      bullets = bullets.filter(bullet => bullet.x >= this.left && bullet.x <= this.right);
+      enemyBullets = enemyBullets.filter(bullet => bullet.x >= this.left - 120 && bullet.x <= this.right + 120);
     }
 
     updateBossGrounding() {
@@ -8765,33 +8802,22 @@
       for (const cover of this.covers) cover.update(dt, this.state);
 
       if (this.state === "intro") {
-        this.elapsed += dt;
-        const moveT = smoothStep(clamp(this.elapsed / this.introDuration, 0, 1));
-        this.cameraBlend = smoothStep(clamp(this.elapsed / 1.18, 0, 1));
-        this.gateBlend = smoothStep(clamp((this.elapsed - 0.10) / 0.72, 0, 1));
+        // Backward-compatible network recovery from older snapshots. Promote
+        // directly to normal combat without replaying the removed transition.
+        this.state = "fight";
+        this.elapsed = 0;
+        this.combatReady = true;
         if (this.boss && !this.boss.dead) {
-          this.boss.x = mix(this.bossEntryX, this.bossHomeX, moveT);
+          this.boss.x = this.bossHomeX;
           this.updateBossGrounding();
-          if ("homeX" in this.boss) this.boss.homeX = this.bossHomeX;
+          this.boss.introTimer = Math.min(this.boss.introTimer, 0.20);
         }
-        if (this.elapsed >= this.introDuration) {
-          this.state = "fight";
-          this.combatReady = true;
-          this.cameraBlend = 1;
-          this.gateBlend = 1;
-          if (this.boss && !this.boss.dead) {
-            this.boss.x = this.bossHomeX;
-            this.updateBossGrounding();
-            this.boss.introTimer = 0;
-            this.boss.attackTimer = Math.max(this.boss.attackTimer, 1.20);
-          }
-        }
-        return;
       }
 
       if (this.state === "fight") {
-        this.cameraBlend = 1;
-        this.gateBlend = 1;
+        this.elapsed += dt;
+        this.cameraBlend = 0;
+        this.gateBlend = smoothStep(clamp(this.elapsed / 0.34, 0, 1));
         this.updatePlatformPressure(dt);
         if (this.phaseRecovery > 0) {
           this.phaseRecovery -= dt;
@@ -10719,12 +10745,6 @@
       if (Number.isFinite(piece.cx) && Number.isFinite(piece.cy)) burst(piece.cx, piece.cy, boss.profile.accent, 3, 85);
       piece.dead = true;
     }
-    for (const piece of setPieces) {
-      if (piece.dead) continue;
-      if (piece.x + piece.w >= cameraX - 100 && piece.x <= cameraX + visibleWorldW + 100) burst(piece.cx, piece.cy, boss.profile.accent, 5, 110);
-      piece.dead = true;
-    }
-
     audio.bossWarning(campaignLevel);
     bossArena.placeCombatants();
   }
@@ -11087,8 +11107,6 @@
       desiredX = stageIntro.targetX - visibleWorldW * (portrait ? 0.42 : 0.36);
     } else if (victoryScene) {
       desiredX = victoryScene.x + victoryScene.w * 0.5 - visibleWorldW * 0.5;
-    } else if (bossArena) {
-      desiredX = bossArena.cameraTargetX(visibleWorldW);
     } else if (levelState === "vehicle" && introVehicle) {
       desiredX = introVehicle.x - visibleWorldW * 0.28;
     } else if (levelState === "crash") {
@@ -11099,14 +11117,12 @@
     }
 
     cameraTargetX = clamp(desiredX, bounds.min, bounds.max);
-    const horizontalResponse = bossArena
-      ? (bossArena.state === "intro" ? 4.0 : 6.0)
-      : levelState === "crash" ? 5.0
+    const horizontalResponse = levelState === "crash" ? 5.0
       : levelState === "vehicle" ? 6.5
       : 7.5;
     const horizontalBlend = 1 - Math.exp(-horizontalResponse * dt);
     const requestedStep = (cameraTargetX - cameraX) * horizontalBlend;
-    const maxCameraSpeed = levelState === "vehicle" ? 240 : bossArena ? 430 : 360;
+    const maxCameraSpeed = levelState === "vehicle" ? 240 : 360;
     cameraX += clamp(requestedStep, -maxCameraSpeed * dt, maxCameraSpeed * dt);
     if (Math.abs(cameraTargetX - cameraX) < 0.02) cameraX = cameraTargetX;
     cameraX = clamp(cameraX, bounds.min, bounds.max);
@@ -11134,7 +11150,6 @@
       }
     }
 
-    if (bossArena) desiredY = bossArena.cameraTargetY(visibleWorldH, desiredY);
     if (victoryScene) desiredY = victoryScene.y + victoryScene.h * 0.62 - visibleWorldH * 0.55;
     cameraTargetY = clampCameraY(desiredY);
 
@@ -11346,38 +11361,29 @@
     const skyX = cameraX - 300;
     const skyW = visibleWorldW + 600;
 
-    if (zone === 0) {
-      ctx.fillStyle = "#050816"; ctx.fillRect(skyX, top, skyW, bottom - top);
-      ctx.fillStyle = "#09152a"; ctx.fillRect(skyX, 105, skyW, 150);
-      ctx.fillStyle = "#102b43"; ctx.fillRect(skyX, 255, skyW, 165);
-      ctx.fillStyle = "#234154"; ctx.fillRect(skyX, 420, skyW, 170);
-      ctx.fillStyle = "#704634"; ctx.fillRect(skyX, 590, skyW, GROUND_Y - 590);
-    } else if (zone === 1) {
-      ctx.fillStyle = "#07051a"; ctx.fillRect(skyX, top, skyW, bottom - top);
-      ctx.fillStyle = "#14103a"; ctx.fillRect(skyX, 120, skyW, 170);
-      ctx.fillStyle = "#27205a"; ctx.fillRect(skyX, 290, skyW, 165);
-      ctx.fillStyle = "#1f4760"; ctx.fillRect(skyX, 455, skyW, GROUND_Y - 455);
-    } else if (zone === 2) {
-      ctx.fillStyle = "#02030b"; ctx.fillRect(skyX, top, skyW, bottom - top);
-      ctx.fillStyle = "#090d24"; ctx.fillRect(skyX, 150, skyW, 190);
-      ctx.fillStyle = "#181338"; ctx.fillRect(skyX, 340, skyW, 190);
-      ctx.fillStyle = "#252149"; ctx.fillRect(skyX, 530, skyW, GROUND_Y - 530);
-    } else if (zone === 3) {
-      ctx.fillStyle = "#061108"; ctx.fillRect(skyX, top, skyW, bottom - top);
-      ctx.fillStyle = "#102719"; ctx.fillRect(skyX, 120, skyW, 175);
-      ctx.fillStyle = "#214225"; ctx.fillRect(skyX, 295, skyW, 170);
-      ctx.fillStyle = "#40572a"; ctx.fillRect(skyX, 465, skyW, GROUND_Y - 465);
-    } else if (zone === 4) {
-      ctx.fillStyle = "#06131f"; ctx.fillRect(skyX, top, skyW, bottom - top);
-      ctx.fillStyle = "#12324b"; ctx.fillRect(skyX, 115, skyW, 180);
-      ctx.fillStyle = "#28536a"; ctx.fillRect(skyX, 295, skyW, 170);
-      ctx.fillStyle = "#6f9aaa"; ctx.fillRect(skyX, 465, skyW, GROUND_Y - 465);
-    } else {
-      ctx.fillStyle = "#090518"; ctx.fillRect(skyX, top, skyW, bottom - top);
-      ctx.fillStyle = "#21103b"; ctx.fillRect(skyX, 120, skyW, 180);
-      ctx.fillStyle = "#44255f"; ctx.fillRect(skyX, 300, skyW, 175);
-      ctx.fillStyle = "#6e3f6c"; ctx.fillRect(skyX, 475, skyW, GROUND_Y - 475);
+    const mutedSky = [
+      ["#090d15", "#111b27", "#1a2934", "#29343a", "#403a36"],
+      ["#0d0c18", "#171728", "#20283a", "#293943", "#36444b"],
+      ["#080a12", "#111522", "#1b2030", "#252b3a", "#303441"],
+      ["#0b120e", "#152019", "#223126", "#314134", "#3d4b3e"],
+      ["#0b1318", "#16242d", "#263943", "#3a5058", "#51646a"],
+      ["#100d17", "#1d1827", "#2d2637", "#40354a", "#504356"]
+    ][zone];
+    const skyStops = zone === 0 ? [top, 105, 255, 420, 590]
+      : zone === 1 ? [top, 120, 290, 455, GROUND_Y]
+      : zone === 2 ? [top, 150, 340, 530, GROUND_Y]
+      : zone === 3 ? [top, 120, 295, 465, GROUND_Y]
+      : zone === 4 ? [top, 115, 295, 465, GROUND_Y]
+      : [top, 120, 300, 475, GROUND_Y];
+    for (let i = 0; i < mutedSky.length; i++) {
+      const y = skyStops[i];
+      const nextY = i + 1 < skyStops.length ? skyStops[i + 1] : bottom;
+      ctx.fillStyle = mutedSky[i];
+      ctx.fillRect(skyX, y, skyW, Math.max(0, nextY - y));
     }
+
+    ctx.save();
+    ctx.globalAlpha = 0.68;
 
     for (const star of stars) {
       if (star.x < cameraX - 100 || star.x > cameraX + visibleWorldW + 100) continue;
@@ -11414,11 +11420,21 @@
       drawChronoCitadel();
     }
 
+    ctx.restore();
+
+    // A soft atmospheric veil keeps animated scenery behind enemies, bullets,
+    // hazards, and traversal geometry.
+    ctx.fillStyle = "rgba(5,8,12,.18)";
+    ctx.fillRect(skyX, top, skyW, Math.max(0, GROUND_Y - top));
+
     drawTerrain(bottom);
 
+    ctx.save();
+    ctx.globalAlpha = 0.72;
     for (const decoration of decorations) {
       if (decoration.x > cameraX - 200 && decoration.x < cameraX + visibleWorldW + 200) drawDecoration(decoration);
     }
+    ctx.restore();
     for (const platform of platforms) {
       if (!platform.dead && !platform.arenaSuppressed && platform.x + platform.w > cameraX - 100 && platform.x < cameraX + visibleWorldW + 100) drawPlatform(platform);
     }
@@ -11704,12 +11720,12 @@
     if (decoration.type === "building") {
       const { w, h, style, seed } = decoration;
       const palettes = {
-        city: ["#242c35", "#3a4652", "#e3b14d", "#12181f"],
-        neon: ["#171a39", "#30345f", "#59ecff", "#ff5ed7"],
-        core: ["#19162d", "#342c50", "#69ffb0", "#8b5cff"],
-        bio: ["#18301f", "#315637", "#8dff5d", "#d5ff92"],
-        frost: ["#203746", "#456579", "#b8f5ff", "#ffffff"],
-        chrono: ["#241535", "#4a2d5d", "#ff8df4", "#ffd75e"]
+        city: ["#242a30", "#35404a", "#9a8461", "#171c21"],
+        neon: ["#1d2030", "#34394d", "#668a9b", "#745c82"],
+        core: ["#1c1d29", "#35394a", "#668f83", "#665f80"],
+        bio: ["#202b23", "#3a4a3c", "#78906d", "#9ba58a"],
+        frost: ["#26343d", "#4b5d68", "#8da5ad", "#c0c9cc"],
+        chrono: ["#282331", "#4a4052", "#8f718c", "#9b8966"]
       };
       const palette = palettes[style];
       ctx.fillStyle = palette[0];
@@ -12613,7 +12629,7 @@
     ctx.fillStyle = UI_THEME.muted;
     ctx.font = `700 ${7 * scale}px ${UI_FONT}`;
     ctx.textAlign = "right";
-    ctx.fillText("v8.4.0 ONLINE", x + panelW - 8 * scale, y + panelH - 7 * scale);
+    ctx.fillText("v8.5.0 ONLINE", x + panelW - 8 * scale, y + panelH - 7 * scale);
   }
 
 
@@ -12872,7 +12888,7 @@
     ctx.fillStyle = UI_THEME.muted;
     ctx.font = `700 ${7 * scale}px ${UI_FONT}`;
     ctx.textAlign = "right";
-    ctx.fillText("v8.4.0 ONLINE", x + panelW - 8 * scale, y + panelH - 7 * scale);
+    ctx.fillText("v8.5.0 ONLINE", x + panelW - 8 * scale, y + panelH - 7 * scale);
   }
 
   function drawCharacterPreview(profile, cx, cy, scale, selected = false) {
@@ -13037,7 +13053,7 @@
     ctx.fillStyle = UI_THEME.muted;
     ctx.font = `700 ${7 * scale}px ${UI_FONT}`;
     ctx.textAlign = "right";
-    ctx.fillText("v8.4.0 ONLINE", x + panelW - 8 * scale, y + panelH - 7 * scale);
+    ctx.fillText("v8.5.0 ONLINE", x + panelW - 8 * scale, y + panelH - 7 * scale);
   }
 
   function drawCanvasMenu() {
