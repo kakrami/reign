@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>Iron Reign: Urban Assault v8.7.1 Online</title>
+<title>Iron Reign: Urban Assault v8.8.0 Online</title>
 <style>
   :root {
     --safe-top: env(safe-area-inset-top, 0px);
@@ -43,7 +43,7 @@
 (() => {
   "use strict";
 
-  // IRON REIGN ONLINE v8.7.1 UNIFIED GAME UI
+  // IRON REIGN ONLINE v8.8.0 UNIFIED GAME UI
 
   const canvas = document.getElementById("game");
   const ctx = canvas.getContext("2d", { alpha: false });
@@ -80,7 +80,7 @@
   });
 
   const MULTIPLAYER_PROTOCOL = 1;
-  const MULTIPLAYER_VERSION = "iron-reign-online-8.7.1";
+  const MULTIPLAYER_VERSION = "iron-reign-online-8.8.0";
   const ROOM_CODE_LENGTH = 5;
   const MAX_ONLINE_PLAYERS = 4;
   const ONLINE_API = ["localhost", "127.0.0.1"].includes(location.hostname)
@@ -529,6 +529,8 @@
 
   let players = [];
   let enemies = [];
+  let stageEnemySpawns = [];
+  let stageEnemySpawnCooldown = 0;
   let bullets = [];
   let enemyBullets = [];
   let pickups = [];
@@ -5269,10 +5271,15 @@
       if (available <= 0) { this.fanBurst(); return; }
       types.slice(0, available).forEach((type, index) => {
         const side = index % 2 ? 1 : -1;
-        const x = clamp(this.cx + side * (250 + index * 90), this.arenaLeft + 180, this.arenaRight - 160);
-        const y = ["jet", "drone", "orb", "bomber", "specter"].includes(type) ? terrainSurfaceY(x) - 300 - index * 35 : null;
+        const x = clamp(
+          side < 0 ? this.arenaLeft - 100 - index * 55 : this.arenaRight + 100 + index * 55,
+          20,
+          LEVEL_W - 100
+        );
+        const airborne = ["jet", "drone", "orb", "bomber", "specter"].includes(type);
+        const y = airborne ? clamp(this.cy - 90 - index * 30, 170, terrainSurfaceY(x) - 190) : null;
         spawn(type, x, y);
-        burst(x, y == null ? terrainSurfaceY(x) - 60 : y, this.profile.accent, 10, 150);
+        burst(x, y == null ? terrainSurfaceY(x) - 60 : y, this.profile.accent, 7, 125);
       });
       audio.tone(175, 0.25, "sawtooth", 0.12, 140);
     }
@@ -5800,10 +5807,15 @@
         ? (advancedWing ? ["jet", "bomber", "jet"] : ["bomber", "jet"])
         : (advancedWing ? ["jet", "drone", "jet"] : ["drone", "jet"]);
       types.forEach((type, index) => {
-        const x = clamp(this.cx - 80 + index * 105, this.arenaLeft + 120, this.arenaRight - 120);
-        const y = clamp(this.cy - 55 - index * 26, 150, terrainSurfaceY(x) - 210);
+        const side = index % 2 ? 1 : -1;
+        const x = clamp(
+          side < 0 ? this.arenaLeft - 125 - index * 45 : this.arenaRight + 125 + index * 45,
+          20,
+          LEVEL_W - 100
+        );
+        const y = clamp(this.cy - 80 - index * 28, 155, terrainSurfaceY(x) - 220);
         spawn(type, x, y);
-        burst(x, y, this.profile.accent, 8, 135);
+        burst(x, y, this.profile.accent, 6, 120);
       });
       const target = this.target();
       if (target) hazards.push(new ArenaEruption(target.cx, "plasma", this.profile.accent, 0.62, 0.34, 72, 132, 18 + this.combatTier * 2));
@@ -9595,6 +9607,7 @@
       entityCounter: networkEntityCounter,
       triggered: [...triggered],
       defeatedBosses: [...defeatedBosses],
+      stageSpawnConsumed: stageEnemySpawnState(),
       players: players.map(packNetworkObject),
       enemies: enemies.map(packNetworkObject),
       bullets: bullets.map(packNetworkObject),
@@ -9629,6 +9642,7 @@
     }
     if (Array.isArray(snapshot.triggered)) triggered = new Set(snapshot.triggered);
     if (Array.isArray(snapshot.defeatedBosses)) defeatedBosses = new Set(snapshot.defeatedBosses);
+    applyStageEnemySpawnState(snapshot.stageSpawnConsumed);
     players = mergeNetworkList(players, snapshot.players);
     enemies = mergeNetworkList(enemies, snapshot.enemies);
     bullets = mergeNetworkList(bullets, snapshot.bullets, bullet =>
@@ -10390,15 +10404,26 @@
       ["jet", 72840, 200], ["orb", 73390, 260], ["specter", 73940, 205],
     ];
 
+    stageEnemySpawns = [];
     const seenStageTypes = Array.from({ length: WORLD_ZONES.length }, () => new Set());
-    for (const entry of stageEnemyEntries) {
+    for (let entryIndex = 0; entryIndex < stageEnemyEntries.length; entryIndex++) {
+      const entry = stageEnemyEntries[entryIndex];
       const level = clamp(zoneIndexAt(entry[1]), 0, WORLD_ZONES.length - 1);
       const type = entry[0];
       const firstOfType = !seenStageTypes[level].has(type);
       seenStageTypes[level].add(type);
       const density = clamp(difficulty.enemyDensity * LEVEL_BALANCE[level].enemyDensity, 0.55, 1);
       const hash = Math.abs(Math.sin(entry[1] * 0.013 + type.charCodeAt(0) * 1.73) * 43758.5453) % 1;
-      if (firstOfType || hash < density) spawn(type, entry[1], entry.length > 2 ? entry[2] : null);
+      if (firstOfType || hash < density) {
+        stageEnemySpawns.push({
+          id: `${level}:${entryIndex}`,
+          level,
+          type,
+          x: entry[1],
+          y: entry.length > 2 ? entry[2] : null,
+          consumed: false
+        });
+      }
     }
 
     setupPickups();
@@ -10406,6 +10431,7 @@
 
   function rebuildStageWorld(index) {
     setupLevel();
+    stageEnemySpawnCooldown = 0;
     const zone = WORLD_ZONES[index];
     const minX = zone.start - 140;
     const maxX = zone.end + 140;
@@ -10416,6 +10442,7 @@
     };
 
     enemies = enemies.filter(keep);
+    stageEnemySpawns = stageEnemySpawns.filter(marker => marker.level === index && marker.x >= minX && marker.x <= maxX);
     pickups = pickups.filter(keep);
     hazards = hazards.filter(keep);
     platforms = platforms.filter(keep);
@@ -10424,6 +10451,105 @@
     decorations = decorations.filter(item => item.x >= minX && item.x <= maxX);
     stars = stars.filter(item => item.x >= minX && item.x <= maxX);
     clouds = clouds.filter(item => item.x + item.w >= minX && item.x <= maxX);
+  }
+
+
+  function livingPlayerBounds() {
+    let min = Infinity;
+    let max = -Infinity;
+    for (const player of players) {
+      if (!player || player.dead || player.lives <= 0) continue;
+      min = Math.min(min, player.cx);
+      max = Math.max(max, player.cx);
+    }
+    if (!Number.isFinite(min) || !Number.isFinite(max)) {
+      const fallback = checkpointX;
+      return { min: fallback, max: fallback };
+    }
+    return { min, max };
+  }
+
+  function consumeStageEnemySpawnsBefore(position) {
+    for (const marker of stageEnemySpawns) {
+      if (!marker.consumed && marker.x < position) marker.consumed = true;
+    }
+  }
+
+  function consumeStageEnemySpawnsInRange(left, right) {
+    for (const marker of stageEnemySpawns) {
+      if (!marker.consumed && marker.x >= left && marker.x <= right) marker.consumed = true;
+    }
+  }
+
+  function stageEnemySpawnState() {
+    return stageEnemySpawns.filter(marker => marker.consumed).map(marker => marker.id);
+  }
+
+  function applyStageEnemySpawnState(consumedIds) {
+    if (!Array.isArray(consumedIds)) return;
+    const consumed = new Set(consumedIds);
+    for (const marker of stageEnemySpawns) marker.consumed = consumed.has(marker.id);
+  }
+
+  function stageEnemyEntryX(marker, lead) {
+    if (marker.type === "turret") return marker.x;
+    // Spawn mobile actors beyond the widest normal forward view so they walk or
+    // fly into the scene. This prevents a level-state change from materializing
+    // an already visible enemy in place.
+    const stagger = ((Math.floor(marker.x) + marker.type.charCodeAt(0)) % 3) * 85;
+    const entryAhead = 1120 + stagger;
+    const zone = WORLD_ZONES[campaignLevel];
+    return clamp(Math.max(marker.x, lead + entryAhead), zone.start + 20, zone.end - 100);
+  }
+
+  function spawnStageEnemy(marker, lead) {
+    let spawnX = stageEnemyEntryX(marker, lead);
+    const enemy = new Enemy(marker.type, spawnX, marker.y == null ? terrainSurfaceY(spawnX) : marker.y);
+    if (enemy.grounded && marker.type !== "turret") {
+      const zone = WORLD_ZONES[campaignLevel];
+      spawnX = findSafeRespawnX(spawnX, enemy.w, zone.start + 24, zone.end - enemy.w - 40);
+      enemy.x = spawnX;
+      enemy.y = terrainSurfaceY(enemy.cx) - enemy.h;
+    }
+    enemy.stageEnemy = true;
+    enemy.stageSpawnId = marker.id;
+    enemies.push(enemy);
+    marker.consumed = true;
+  }
+
+  function updateStageEnemyDirector(dt) {
+    if (levelState !== "onfoot" || stageIntro || levelTransition || portalWarp || victoryScene || stageEntryGrace > 0) return;
+    if (onlineSession() && !isNetworkAuthority()) return;
+    if (activeBoss || bossArena) return;
+
+    stageEnemySpawnCooldown = Math.max(0, stageEnemySpawnCooldown - dt);
+    const bounds = livingPlayerBounds();
+    const lead = bounds.max;
+    const trail = bounds.min;
+
+    let nextMarker = null;
+    for (const marker of stageEnemySpawns) {
+      if (marker.consumed) continue;
+      // A spawn marker already behind every living player is finished. Do not
+      // recycle it by creating the enemy farther ahead later.
+      if (marker.x < trail + 40) {
+        marker.consumed = true;
+        continue;
+      }
+      const triggerDistance = marker.type === "turret" ? 1850 : 1160;
+      if (!nextMarker && marker.x - lead <= triggerDistance) nextMarker = marker;
+    }
+
+    if (nextMarker && stageEnemySpawnCooldown <= 0) {
+      spawnStageEnemy(nextMarker, lead);
+      stageEnemySpawnCooldown = [0.48, 0.42, 0.36, 0.31][menuDifficulty] ?? 0.42;
+    }
+
+    // Retire only stage actors that are safely behind every living player.
+    // Boss summons and scripted actors are intentionally not touched here.
+    for (const enemy of enemies) {
+      if (enemy.stageEnemy && !enemy.dead && enemy.x + enemy.w < trail - 1550) enemy.dead = true;
+    }
   }
 
   function markScriptsBeforePosition(position) {
@@ -10526,6 +10652,7 @@
     levelState = "onfoot";
     introVehicle = null;
     markScriptsBeforeLevel(index);
+    consumeStageEnemySpawnsBefore(startX + 120);
 
     for (let i = 0; i < players.length; i++) {
       const player = players[i];
@@ -10745,10 +10872,14 @@
         member.portalHidden = 0;
         member.entryTimer = 0;
         if (levelState === "onfoot") {
-          placePlayerOnSafeGround(member, intro.targetX + member.index * 62, WORLD_ZONES[intro.level].start + 24, WORLD_ZONES[intro.level].end - member.w - 40);
+          const zone = WORLD_ZONES[intro.level];
+          const safeX = findSafeRespawnX(member.x, member.w, zone.start + 24, zone.end - member.w - 40);
+          member.x = safeX;
+          member.y = terrainGroundY(member.cx) - member.h;
           member.onGround = true;
           member.vx = 0;
           member.vy = 0;
+          member.jumpCount = 0;
         }
       }
       checkpointX = (frontAlivePlayer() || players[0]).x;
@@ -10832,6 +10963,7 @@
       startX = findSafeRespawnX(startX, player.w, WORLD_ZONES[startLevel].start + 24, WORLD_ZONES[startLevel].end - player.w - 40);
       checkpointX = startX;
       markScriptsBeforePosition(startX);
+      consumeStageEnemySpawnsBefore(startX + 140);
       enemies = enemies.filter(enemy => enemy.x + enemy.w >= startX - 120);
       pickups = pickups.filter(pickup => pickup.x + pickup.w >= startX - 100);
       placePlayerOnSafeGround(player, startX, WORLD_ZONES[startLevel].start + 24, WORLD_ZONES[startLevel].end - player.w - 40);
@@ -10904,6 +11036,7 @@
     }
 
     introVehicle = null;
+    stageEntryGrace = Math.max(stageEntryGrace, 0.55);
     checkpointX = Math.round(landingX);
   }
 
@@ -10981,6 +11114,7 @@
     stageEntryGrace = Math.max(stageEntryGrace, 1.05);
     const left = bossArena.left - 140;
     const right = bossArena.right + 140;
+    consumeStageEnemySpawnsInRange(left, right);
 
     for (const enemy of enemies) {
       if (enemy.dead || enemy.x + enemy.w < left || enemy.x > right) continue;
@@ -11008,7 +11142,12 @@
     if (activeBoss || defeatedBosses.has(key)) return false;
     const gadget = RIVAL_GADGETS[clamp(stage | 0, 0, RIVAL_GADGETS.length - 1)];
     showBanner(finalEncounter ? "REIGN HUNTER • FINAL RIG" : `REIGN HUNTER • ${gadget.label}`, 1.6);
-    activeBoss = new RivalHunter(stage, x, finalEncounter);
+    const entryX = finalEncounter ? x : Math.max(x, leadingPlayerX(true) + 1080);
+    activeBoss = new RivalHunter(stage, entryX, finalEncounter);
+    if (!finalEncounter) {
+      activeBoss.baseX = x;
+      activeBoss.exitX = x + Math.max(980, 1320 - activeBoss.stage * 45);
+    }
     prepareBossArena(activeBoss);
     return true;
   }
@@ -11292,6 +11431,7 @@
       return;
     }
     for (const player of players) player.update(dt);
+    if (!cinematic) updateStageEnemyDirector(dt);
     if (!cinematic && specialAttack) {
       specialAttack.update(dt);
       if (specialAttack.dead) specialAttack = null;
@@ -12886,7 +13026,7 @@
     ctx.fillStyle = UI_THEME.muted;
     ctx.font = `700 ${7 * scale}px ${UI_FONT}`;
     ctx.textAlign = "right";
-    ctx.fillText("v8.7.1 ONLINE", x + panelW - 8 * scale, y + panelH - 7 * scale);
+    ctx.fillText("v8.8.0 ONLINE", x + panelW - 8 * scale, y + panelH - 7 * scale);
   }
 
 
@@ -13145,7 +13285,7 @@
     ctx.fillStyle = UI_THEME.muted;
     ctx.font = `700 ${7 * scale}px ${UI_FONT}`;
     ctx.textAlign = "right";
-    ctx.fillText("v8.7.1 ONLINE", x + panelW - 8 * scale, y + panelH - 7 * scale);
+    ctx.fillText("v8.8.0 ONLINE", x + panelW - 8 * scale, y + panelH - 7 * scale);
   }
 
   function drawCharacterPreview(profile, cx, cy, scale, selected = false) {
@@ -13310,7 +13450,7 @@
     ctx.fillStyle = UI_THEME.muted;
     ctx.font = `700 ${7 * scale}px ${UI_FONT}`;
     ctx.textAlign = "right";
-    ctx.fillText("v8.7.1 ONLINE", x + panelW - 8 * scale, y + panelH - 7 * scale);
+    ctx.fillText("v8.8.0 ONLINE", x + panelW - 8 * scale, y + panelH - 7 * scale);
   }
 
   function drawCanvasMenu() {
