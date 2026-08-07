@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>Iron Reign: Urban Assault v8.3.4 Online</title>
+<title>Iron Reign: Urban Assault v8.4.0 Online</title>
 <style>
   :root {
     --safe-top: env(safe-area-inset-top, 0px);
@@ -43,7 +43,7 @@
 (() => {
   "use strict";
 
-  // IRON REIGN ONLINE v8.3.4 EMPTY ROOM CLEANUP
+  // IRON REIGN ONLINE v8.4.0 MULTIPLAYER SMOOTHING
 
   const canvas = document.getElementById("game");
   const ctx = canvas.getContext("2d", { alpha: false });
@@ -80,7 +80,7 @@
   });
 
   const MULTIPLAYER_PROTOCOL = 1;
-  const MULTIPLAYER_VERSION = "iron-reign-online-8.3.4";
+  const MULTIPLAYER_VERSION = "iron-reign-online-8.4.0";
   const ROOM_CODE_LENGTH = 5;
   const MAX_ONLINE_PLAYERS = 4;
   const ONLINE_API = ["localhost", "127.0.0.1"].includes(location.hostname)
@@ -135,6 +135,12 @@
     status: "",
     statusTone: "info",
     pendingStartSnapshot: null,
+    pendingSnapshot: null,
+    clockTarget: null,
+    lastSnapshotAt: 0,
+    droppedStatePackets: 0,
+    simulationX: null,
+    simulationY: null,
     preferredCharacter: 0
   };
 
@@ -615,6 +621,23 @@
     return front;
   }
 
+  function isLocalPlayerEntity(player) {
+    if (!player) return false;
+    return onlineSession() ? player.index === net.localId : player === players[0];
+  }
+
+  function cameraFocusPlayer() {
+    if (!players.length) return null;
+    if (!onlineSession()) return frontAlivePlayer();
+    const local = localPlayer();
+    if (local && !local.dead) return local;
+    const living = players.filter(player => !player.dead);
+    if (!living.length) return local || players[0] || null;
+    if (!local) return living[0];
+    return living.reduce((best, player) =>
+      !best || Math.abs(player.cx - local.cx) < Math.abs(best.cx - local.cx) ? player : best, null);
+  }
+
   function leadingPlayerX(useCenter = true) {
     let lead = 0;
     for (const player of players) {
@@ -875,6 +898,23 @@
     cameraTargetY = cameraY;
   }
 
+  const SIMULATION_VIEW_W = 1500;
+  const SIMULATION_VIEW_H = 900;
+
+  function gameplaySimulationView() {
+    const width = Math.min(SIMULATION_VIEW_W, LEVEL_W);
+    const height = SIMULATION_VIEW_H;
+    if (onlineSession() && !isNetworkAuthority() && Number.isFinite(net.simulationX) && Number.isFinite(net.simulationY)) {
+      return { left: net.simulationX, right: net.simulationX + width, top: net.simulationY, bottom: net.simulationY + height, width, height };
+    }
+    const focus = frontAlivePlayer();
+    const focusX = focus ? focus.cx : checkpointX;
+    const left = clamp(focusX - width * 0.36, 0, Math.max(0, LEVEL_W - width));
+    const ground = terrainSurfaceY(focusX);
+    const top = clampCameraY(ground - height * 0.68);
+    return { left, right: left + width, top, bottom: top + height, width, height };
+  }
+
   function resize() {
     const viewport = window.visualViewport;
     const vw = Math.max(1, Math.round(viewport ? viewport.width : innerWidth));
@@ -885,7 +925,7 @@
     const orientationChanged = previousResizePortrait !== null && previousResizePortrait !== nextPortrait;
     const previousBaseWidth = Math.max(1, baseVisibleWorldW);
     const previousViewWidth = Math.max(1, visibleWorldW);
-    const leadBeforeResize = running ? frontAlivePlayer() : null;
+    const leadBeforeResize = running ? cameraFocusPlayer() : null;
     const playerScreenRatio = leadBeforeResize
       ? clamp((leadBeforeResize.cx - cameraX) / previousViewWidth, 0.20, 0.55)
       : 0.36;
@@ -932,7 +972,7 @@
     viewScale = canvas.width / visibleWorldW;
     visibleWorldH = canvas.height / viewScale;
 
-    const leadPlayer = running ? frontAlivePlayer() : null;
+    const leadPlayer = running ? cameraFocusPlayer() : null;
     const focusX = leadPlayer ? leadPlayer.cx : cameraX + visibleWorldW * 0.36;
     const focusY = terrainSurfaceY(focusX);
     const baselineY = clampCameraY(focusY - visibleWorldH * cameraGroundAnchor());
@@ -1552,6 +1592,7 @@
       this.vy = 0;
       this.dead = false;
       this.netId = networkEntityCounter++;
+      this.netBornAt = Number.isFinite(time) ? time : 0;
     }
 
     get cx() { return this.x + this.w / 2; }
@@ -1654,6 +1695,24 @@
     };
   }
 
+  function multiplayerRespawnAnchor(player, minimumX, maximumX) {
+    if (!onlineSession()) return clamp(checkpointX, minimumX, maximumX);
+    const living = players.filter(member => member !== player && !member.dead && member.lives > 0);
+    if (!living.length) return clamp(checkpointX, minimumX, maximumX);
+    const teammate = living.reduce((front, member) => !front || member.cx > front.cx ? member : front, null);
+    const spacing = 150 + (player.index % 2) * 34;
+    const teammateAnchor = teammate.cx - spacing;
+    return clamp(Math.max(checkpointX, teammateAnchor), minimumX, maximumX);
+  }
+
+  function presentLocalRespawn(player) {
+    if (!isLocalPlayerEntity(player)) return;
+    const groundY = terrainGroundY(player.cx);
+    setCameraPosition(player.x - visibleWorldW * 0.28, groundY - visibleWorldH * cameraGroundAnchor());
+    showBanner("REJOINED TEAM", 0.72);
+    audio.respawn();
+  }
+
   class Player extends Entity {
     constructor(index, x, characterIndex = menuCharacter) {
       super(x, GROUND_Y - 82, 46, 82);
@@ -1715,7 +1774,7 @@
     update(dt) {
       if (this.dead) {
         this.respawnTimer -= dt;
-        if (this.respawnTimer <= 0 && this.lives > 0) this.revive();
+        if (this.respawnTimer <= 0 && this.lives > 0 && (!onlineSession() || isNetworkAuthority())) this.revive();
         return;
       }
 
@@ -1863,7 +1922,8 @@
         }
       }
 
-      let leftBound = cameraX + 24;
+      const simulationView = gameplaySimulationView();
+      let leftBound = simulationView.left + 24;
       let rightBound = LEVEL_W - 40;
       if (bossArena && bossArena.isLocked()) {
         leftBound = bossArena.left + 34;
@@ -1893,9 +1953,11 @@
       this.dropPlatform = null;
       this.vx = 0;
       this.vy = 0;
-      impactFeedback(0.075, 9);
-      showBanner("MISSED THE LANDING", 0.85);
-      audio.playerDeath("fall");
+      if (isLocalPlayerEntity(this)) {
+        impactFeedback(0.075, 9);
+        showBanner("MISSED THE LANDING", 0.85);
+        audio.playerDeath("fall");
+      }
     }
 
     beginDiveSmash() {
@@ -2177,10 +2239,10 @@
         this.weapon = 0;
         this.dead = true;
         this.respawnTimer = 1.5;
-        impactFeedback(0.09);
+        if (isLocalPlayerEntity(this)) impactFeedback(0.09);
         explode(this.cx, this.cy, this.color, 22, false);
-        audio.playerDeath("combat");
-      } else {
+        if (isLocalPlayerEntity(this)) audio.playerDeath("combat");
+      } else if (isLocalPlayerEntity(this)) {
         audio.playerHit();
       }
     }
@@ -2194,8 +2256,8 @@
       const bossActive = bossArena && bossArena.isLocked();
       const minimumX = bossActive ? bossArena.left + 72 : WORLD_ZONES[campaignLevel].start + 24;
       const maximumX = bossActive ? bossArena.right - this.w - 72 : WORLD_ZONES[campaignLevel].end - this.w - 40;
-      const preferredX = bossActive ? Math.max(checkpointX, bossArena.left + 110) : checkpointX;
-      const safeX = placePlayerOnSafeGround(this, preferredX, minimumX, maximumX);
+      const preferredX = multiplayerRespawnAnchor(this, minimumX, maximumX);
+      placePlayerOnSafeGround(this, preferredX, minimumX, maximumX);
 
       this.supportPlatform = null;
       this.dropPlatform = null;
@@ -2213,13 +2275,13 @@
       this.invuln = 2.5;
       this.entryTimer = Math.max(this.entryTimer, 0.35);
 
-      const groundY = terrainGroundY(safeX + this.w * 0.5);
-      setCameraPosition(safeX - visibleWorldW * 0.28, groundY - visibleWorldH * cameraGroundAnchor());
-
-      enemyBullets = enemyBullets.filter(bullet => Math.hypot(bullet.cx - this.cx, bullet.cy - this.cy) > 520);
-      debris = debris.filter(piece => Math.hypot(piece.cx - this.cx, piece.cy - this.cy) > 420);
-      showBanner("CHECKPOINT RESTORED", 0.75);
-      audio.respawn();
+      // Only the authority mutates shared combat objects. Presentation stays local
+      // so a teammate respawning never shifts another player's camera.
+      if (!onlineSession() || isNetworkAuthority()) {
+        enemyBullets = enemyBullets.filter(bullet => Math.hypot(bullet.cx - this.cx, bullet.cy - this.cy) > 520);
+        debris = debris.filter(piece => Math.hypot(piece.cx - this.cx, piece.cy - this.cy) > 420);
+      }
+      presentLocalRespawn(this);
     }
 
     addScore(amount) {
@@ -2452,7 +2514,7 @@
         rocket: 2.3,
         normal: 1.8
       }[type] || 1.8;
-      this.maxDistance = Math.max(minimumRange, baseVisibleWorldW * screenMultiplier);
+      this.maxDistance = Math.max(minimumRange, SIMULATION_VIEW_W * screenMultiplier);
       this.maxLifetime = Math.max(3.2, this.maxDistance / Math.max(1, this.speed) + 1.2);
       this.target = null;
       this.turnRate = 5.8;
@@ -2461,11 +2523,12 @@
     }
 
     targetIsOnScreen(target) {
+      const view = gameplaySimulationView();
       return target && !target.dead &&
-        target.x + target.w >= cameraX &&
-        target.x <= cameraX + visibleWorldW &&
-        target.y + target.h >= cameraY &&
-        target.y <= cameraY + visibleWorldH;
+        target.x + target.w >= view.left &&
+        target.x <= view.right &&
+        target.y + target.h >= view.top &&
+        target.y <= view.bottom;
     }
 
     acquireTarget() {
@@ -2677,12 +2740,13 @@
       this.y += this.vy * dt * timeScale;
       this.life -= dt * timeScale;
 
+      const simulationView = gameplaySimulationView();
       if (
         this.life <= 0 ||
-        this.x < cameraX - 450 ||
-        this.x > cameraX + visibleWorldW + 600 ||
-        this.y < cameraY - 250 ||
-        this.y > cameraY + visibleWorldH + 300
+        this.x < simulationView.left - 450 ||
+        this.x > simulationView.right + 600 ||
+        this.y < simulationView.top - 250 ||
+        this.y > simulationView.bottom + 300
       ) {
         this.dead = true;
         return;
@@ -2788,7 +2852,8 @@
         burst(this.cx - this.vx * 0.035, this.cy - this.vy * 0.035, "#7b7186", 1, 28);
       }
 
-      if (this.life <= 0 || this.cx < cameraX - 420 || this.cx > cameraX + visibleWorldW + 500 || this.cy > terrainSurfaceY(this.cx)) {
+      const simulationView = gameplaySimulationView();
+      if (this.life <= 0 || this.cx < simulationView.left - 420 || this.cx > simulationView.right + 500 || this.cy > terrainSurfaceY(this.cx)) {
         this.dead = true;
         explode(this.cx, this.cy, this.color, 10, false, 1);
         return;
@@ -2848,11 +2913,12 @@
       this.mode = this.profile.id;
       this.time = 0;
       this.dead = false;
-      this.paddingX = Math.max(120, visibleWorldW * 0.10);
-      this.left = cameraX - this.paddingX;
-      this.right = cameraX + visibleWorldW + this.paddingX;
-      this.top = cameraY - 100;
-      this.bottom = cameraY + visibleWorldH + 120;
+      const simulationView = gameplaySimulationView();
+      this.paddingX = Math.max(120, simulationView.width * 0.10);
+      this.left = simulationView.left - this.paddingX;
+      this.right = simulationView.right + this.paddingX;
+      this.top = simulationView.top - 100;
+      this.bottom = simulationView.bottom + 120;
       this.impacts = [];
       this.slashes = [];
       this.targets = this.collectTargets();
@@ -3541,11 +3607,12 @@
       if (Math.abs(this.knockbackVx) < 1) this.knockbackVx = 0;
       this.x += this.knockbackVx * dt;
 
+      const simulationView = gameplaySimulationView();
       const canAttackOnScreen = !specialAttack && this.activationTimer <= 0 &&
-        this.x + this.w >= cameraX - 80 &&
-        this.x <= cameraX + visibleWorldW + 80 &&
-        this.y + this.h >= cameraY - 80 &&
-        this.y <= cameraY + visibleWorldH + 80;
+        this.x + this.w >= simulationView.left - 80 &&
+        this.x <= simulationView.right + 80 &&
+        this.y + this.h >= simulationView.top - 80 &&
+        this.y <= simulationView.bottom + 80;
 
       if (this.retreatTimer > 0 && this.contactEnabled) {
         this.x -= toward * this.speed * 1.45 * dt;
@@ -3672,7 +3739,8 @@
 
     startSpecterDash(player) {
       const side = this.attackMode++ % 2 ? -1 : 1;
-      const destinationX = clamp(player.cx + side * 470, cameraX + 120, cameraX + visibleWorldW - this.w - 120);
+      const simulationView = gameplaySimulationView();
+      const destinationX = clamp(player.cx + side * 470, simulationView.left + 120, simulationView.right - this.w - 120);
       const destinationY = clamp(player.y - 185, 160, 470);
       this.phaseDash = {
         mode: "windup",
@@ -4880,8 +4948,9 @@
 
       if (name === "gravity") {
         const target = this.target();
-        const visibleLeft = Math.max(this.arenaLeft + 190, cameraX + 170);
-        const visibleRight = Math.min(this.arenaRight - 190, cameraX + visibleWorldW - 170);
+        const simulationView = gameplaySimulationView();
+        const visibleLeft = Math.max(this.arenaLeft + 190, simulationView.left + 170);
+        const visibleRight = Math.min(this.arenaRight - 190, simulationView.right - 170);
         const leftX = visibleLeft < visibleRight ? visibleLeft : this.arenaLeft + 260;
         const rightX = visibleLeft < visibleRight ? visibleRight : this.arenaRight - 260;
         const towardBoss = target ? (Math.sign(this.cx - target.cx) || -this.facing) : -this.facing;
@@ -4931,7 +5000,7 @@
       const shift = this.attackMode % 2 ? 70 : 0;
       for (let i = 0; i < count; i++) {
         const x = this.arenaLeft + 100 + shift + width * (i + 0.5) / count;
-        enemyBullets.push(new EnemyBullet(x, cameraY - 70, 0, 250 + campaignLevel * 22, (11 + campaignLevel) * enemyDamageScale(), 11, this.profile.accent));
+        enemyBullets.push(new EnemyBullet(x, gameplaySimulationView().top - 70, 0, 250 + campaignLevel * 22, (11 + campaignLevel) * enemyDamageScale(), 11, this.profile.accent));
       }
       audio.boss();
     }
@@ -4942,7 +5011,7 @@
       const shift = this.attackMode % 2 ? 85 : 0;
       for (let i = 0; i < count; i++) {
         const x = this.arenaLeft + 110 + shift + width * (i + 0.5) / count;
-        debris.push(new FallingDebris(x, cameraY - 110, 34 + campaignLevel * 4, true));
+        debris.push(new FallingDebris(x, gameplaySimulationView().top - 110, 34 + campaignLevel * 4, true));
       }
       audio.boss();
     }
@@ -5420,7 +5489,7 @@
       const debrisCount = Math.max(1, 1 + Math.floor(this.combatTier / 2) + Math.max(0, bossPatternBonus()));
       for (let i = 0; i < debrisCount; i++) {
         const x = clamp(impactX - 110 + i * 110, this.arenaLeft + 60, this.arenaRight - 60);
-        debris.push(new FallingDebris(x, cameraY - 80 - i * 35, 30 + i * 4, true));
+        debris.push(new FallingDebris(x, gameplaySimulationView().top - 80 - i * 35, 30 + i * 4, true));
       }
       audio.crash(1.65);
       impactFeedback(0.09);
@@ -5519,7 +5588,7 @@
       const direction = target && target.cx > (this.arenaLeft + this.arenaRight) * 0.5 ? 1 : -1;
       const startX = direction < 0 ? this.arenaRight - this.w - 40 : this.arenaLeft + 40;
       const endX = direction < 0 ? this.arenaLeft + 50 : this.arenaRight - this.w - 50;
-      const startY = Math.max(cameraY + 120, terrainSurfaceY(startX + this.w / 2) - this.h - 320);
+      const startY = Math.max(gameplaySimulationView().top + 120, terrainSurfaceY(startX + this.w / 2) - this.h - 320);
       this.flightAction = {
         type: "swoop", mode: "reposition", time: 0, duration: 1.72,
         transitionDuration: 0.42, direction, startX, startY, endX,
@@ -5534,7 +5603,7 @@
       const direction = this.attackMode % 2 ? -1 : 1;
       const startX = direction > 0 ? this.arenaLeft - this.w - 80 : this.arenaRight + 80;
       const endX = direction > 0 ? this.arenaRight + 80 : this.arenaLeft - this.w - 80;
-      const startY = Math.max(cameraY + 115, terrainSurfaceY(startX + this.w / 2) - this.h - 275);
+      const startY = Math.max(gameplaySimulationView().top + 115, terrainSurfaceY(startX + this.w / 2) - this.h - 275);
       this.flightAction = {
         type: "bombRun", mode: "reposition", time: 0, duration: 2.30,
         transitionDuration: 0.42, direction, startX, startY, endX,
@@ -5910,7 +5979,7 @@
       for (let i = 0; i < count; i++) {
         const target = living[i % Math.max(1, living.length)] || this.target();
         const x = clamp((target ? target.cx : this.cx) + (i - (count - 1) / 2) * 92, this.arenaLeft + 70, this.arenaRight - 70);
-        debris.push(new FallingDebris(x, cameraY - 120 - i * 30, 34 + (i % 3) * 8, true));
+        debris.push(new FallingDebris(x, gameplaySimulationView().top - 120 - i * 30, 34 + (i % 3) * 8, true));
       }
       hazards.push(new ArenaEruption(clamp(this.target()?.cx ?? this.cx, this.arenaLeft + 120, this.arenaRight - 120), "ice", this.profile.accent, 0.78, 0.46, 92, 190, 22));
       audio.tone(118, 0.32, "sawtooth", 0.12, -70);
@@ -6438,8 +6507,9 @@
       this.nextFirework -= dt;
       if (this.elapsed > 1.1 && this.nextFirework <= 0) {
         this.nextFirework = this.final ? 0.24 : this.major ? 0.38 : 0.55;
-        const x = cameraX + visibleWorldW * rand(0.18, 0.82);
-        const y = cameraY + visibleWorldH * rand(0.15, 0.42);
+        const simulationView = gameplaySimulationView();
+        const x = simulationView.left + simulationView.width * rand(0.18, 0.82);
+        const y = simulationView.top + simulationView.height * rand(0.15, 0.42);
         blastEffects.push(new BlastEffect(x, y, chance(0.5) ? "#63e5ff" : "#fff36d", this.major ? 2 : 1));
         audio.toneAt(rand(330, 620), 0.08, "square", 0.045, rand(-80, 120));
       }
@@ -7911,8 +7981,9 @@
   class BossFlyby extends Entity {
     constructor(profileKey, direction = -1, bombs = 4) {
       const profile = BOSS_PROFILES[profileKey];
-      const startX = direction < 0 ? cameraX + visibleWorldW + 280 : cameraX - profile.w - 280;
-      const y = cameraY + 155;
+      const simulationView = gameplaySimulationView();
+      const startX = direction < 0 ? simulationView.right + 280 : simulationView.left - profile.w - 280;
+      const y = simulationView.top + 155;
       super(startX, y, profile.w, profile.h);
       this.profile = profile;
       this.direction = direction;
@@ -7928,16 +7999,17 @@
       this.phase += dt;
       this.x += this.direction * this.speed * dt;
       this.y += Math.sin(this.phase * 3) * 28 * dt;
-      const visible = this.x + this.w > cameraX + 60 && this.x < cameraX + visibleWorldW - 60;
+      const simulationView = gameplaySimulationView();
+      const visible = this.x + this.w > simulationView.left + 60 && this.x < simulationView.right - 60;
       if (visible) this.dropTimer -= dt;
       if (visible && this.bombs > 0 && this.dropTimer <= 0) {
         this.dropTimer = 0.46;
         this.bombs--;
         const target = players.find(player => !player.dead);
-        const targetX = clamp((target ? target.cx + target.vx * 0.35 : this.cx) + rand(-120, 120), cameraX + 100, cameraX + visibleWorldW - 100);
+        const targetX = clamp((target ? target.cx + target.vx * 0.35 : this.cx) + rand(-120, 120), simulationView.left + 100, simulationView.right - 100);
         debris.push(new SiegeMortar(this.cx, this.cy, targetX, this.profile.accent, 0.05, 1));
       }
-      if (this.life <= 0 || this.x + this.w < cameraX - 500 || this.x > cameraX + visibleWorldW + 500) this.dead = true;
+      if (this.life <= 0 || this.x + this.w < simulationView.left - 500 || this.x > simulationView.right + 500) this.dead = true;
     }
 
     draw() {
@@ -8517,7 +8589,7 @@
 
     targetViewWidth() {
       const factor = portrait ? this.layout.viewTall : this.layout.viewWide;
-      const player = frontAlivePlayer();
+      const player = cameraFocusPlayer();
       const boss = this.boss && !this.boss.dead ? this.boss : null;
       let desired = baseVisibleWorldW * factor;
       if (player && boss) {
@@ -8530,7 +8602,7 @@
     }
 
     cameraTargetX(viewWidth) {
-      const player = frontAlivePlayer();
+      const player = cameraFocusPlayer();
       const boss = this.boss && !this.boss.dead ? this.boss : null;
       let focus = this.center;
       if (player && boss) {
@@ -8545,7 +8617,7 @@
     }
 
     cameraTargetY(viewHeight, fallback) {
-      const player = frontAlivePlayer();
+      const player = cameraFocusPlayer();
       const boss = this.boss && !this.boss.dead ? this.boss : null;
       const ground = terrainSurfaceY(this.center);
       let top = ground - 260;
@@ -8901,6 +8973,12 @@
   function sendServer(payload) {
     if (!connectedSocket()) return false;
     try {
+      // Never build a queue of obsolete world snapshots. Inputs remain small and
+      // are always allowed through, while state waits for the socket to drain.
+      if (payload && payload.t === "state" && net.socket.bufferedAmount > 196608) {
+        net.droppedStatePackets++;
+        return false;
+      }
       net.socket.send(JSON.stringify({ ...payload, pv: MULTIPLAYER_PROTOCOL }));
       return true;
     } catch (_) {
@@ -8939,7 +9017,7 @@
     };
     net.localInput = next;
     net.inputs.set(net.localId, next);
-    net.inputSendAt = performance.now() + 80;
+    net.inputSendAt = performance.now() + 50;
     sendServer({ t: "input", v: next, seq: next.seq });
   }
 
@@ -8964,7 +9042,7 @@
     net.inputs.set(net.localId, next);
     const now = performance.now();
     if (inputPacketChanged(previous, next) || now >= net.inputSendAt) {
-      net.inputSendAt = now + 80;
+      net.inputSendAt = now + 50;
       sendServer({ t: "input", v: next, seq: next.seq });
     }
   }
@@ -9018,7 +9096,8 @@
     if (!object) return null;
     const row = { __type: object.constructor && object.constructor.name ? object.constructor.name : "Entity" };
     for (const [key, value] of Object.entries(object)) {
-      if (["profile", "supportPlatform", "dropPlatform", "target", "pendingAttack"].includes(key)) continue;
+      if (["profile", "supportPlatform", "dropPlatform", "target", "pendingAttack",
+        "netSyncX", "netSyncY", "netSyncVx", "netSyncVy", "netSyncClock"].includes(key)) continue;
       const packed = packNetworkValue(value);
       if (packed !== undefined) row[key] = packed;
     }
@@ -9029,6 +9108,7 @@
     if (!row || typeof row !== "object") return null;
     const prototypes = NETWORK_PROTOTYPES();
     let object = existing;
+    const hadExisting = Boolean(existing);
     if (!object) {
       if (row.__type === "Player") object = new Player(row.index || 0, row.x || 0, row.characterIndex || 0);
       else if (row.__type === "Enemy") object = new Enemy(row.type || "runner", row.x || 0, (row.y || 0) + (row.h || 70));
@@ -9041,10 +9121,58 @@
         object = Constructor ? Object.create(Constructor.prototype) : Object.create(Entity.prototype);
       }
     }
+
+    const before = hadExisting ? {
+      x: object.x, y: object.y, vx: object.vx, vy: object.vy,
+      dead: Boolean(object.dead), portalTransit: Boolean(object.portalTransit)
+    } : null;
+    const incomingMotion = {
+      x: unpackNetworkValue(row.x), y: unpackNetworkValue(row.y),
+      vx: unpackNetworkValue(row.vx), vy: unpackNetworkValue(row.vy)
+    };
+    const smoothMotion = hadExisting && onlineSession() && !isNetworkAuthority() &&
+      Number.isFinite(incomingMotion.x) && Number.isFinite(incomingMotion.y);
+
     for (const [key, value] of Object.entries(row)) {
       if (key === "__type") continue;
+      if (smoothMotion && ["x", "y", "vx", "vy"].includes(key)) continue;
       object[key] = unpackNetworkValue(value);
     }
+
+    if (smoothMotion) {
+      const revived = object instanceof Player && before.dead && !object.dead;
+      const portalChanged = before.portalTransit !== Boolean(object.portalTransit);
+      const dx = incomingMotion.x - before.x;
+      const dy = incomingMotion.y - before.y;
+      const localPlayerObject = object instanceof Player && object.index === net.localId;
+      const hardDistance = localPlayerObject ? 360 : object instanceof Player ? 300 :
+        object instanceof Bullet || object instanceof EnemyBullet ? 230 : object instanceof StageBoss ? 520 : 360;
+      const forceSnap = revived || portalChanged || Math.hypot(dx, dy) > hardDistance;
+      if (forceSnap) {
+        object.x = incomingMotion.x;
+        object.y = incomingMotion.y;
+        if (Number.isFinite(incomingMotion.vx)) object.vx = incomingMotion.vx;
+        if (Number.isFinite(incomingMotion.vy)) object.vy = incomingMotion.vy;
+        object.netSyncX = undefined;
+        object.netSyncY = undefined;
+      } else {
+        object.x = before.x;
+        object.y = before.y;
+        object.vx = before.vx;
+        object.vy = before.vy;
+        object.netSyncX = incomingMotion.x;
+        object.netSyncY = incomingMotion.y;
+        object.netSyncVx = Number.isFinite(incomingMotion.vx) ? incomingMotion.vx : before.vx;
+        object.netSyncVy = Number.isFinite(incomingMotion.vy) ? incomingMotion.vy : before.vy;
+        object.netSyncClock = time;
+      }
+      if (revived) presentLocalRespawn(object);
+    } else {
+      for (const key of ["x", "y", "vx", "vy"]) {
+        if (Number.isFinite(incomingMotion[key])) object[key] = incomingMotion[key];
+      }
+    }
+
     if (Number.isFinite(object.netId)) networkEntityCounter = Math.max(networkEntityCounter, (object.netId | 0) + 1);
     if (object instanceof Player) {
       object.characterIndex = clamp(object.characterIndex | 0, 0, CHARACTER_PROFILES.length - 1);
@@ -9060,10 +9188,61 @@
     return object;
   }
 
-  function mergeNetworkList(current, packedRows) {
+  function mergeNetworkList(current, packedRows, preserve = null) {
     if (!Array.isArray(packedRows)) return current;
     const byId = new Map(current.filter(Boolean).map(item => [item.netId, item]));
-    return packedRows.map(row => restoreNetworkObject(row, byId.get(row.netId))).filter(Boolean);
+    const incomingIds = new Set(packedRows.map(row => row && row.netId));
+    const merged = packedRows.map(row => restoreNetworkObject(row, byId.get(row.netId))).filter(Boolean);
+    if (typeof preserve === "function") {
+      for (const item of current) {
+        if (item && !incomingIds.has(item.netId) && preserve(item)) merged.push(item);
+      }
+    }
+    return merged;
+  }
+
+  function reconcileNetworkObject(object, dt) {
+    if (!object || !Number.isFinite(object.netSyncX) || !Number.isFinite(object.netSyncY)) return;
+    const localPlayerObject = object instanceof Player && object.index === net.localId;
+    const projectile = object instanceof Bullet || object instanceof EnemyBullet || object instanceof BossMissile;
+    const response = localPlayerObject ? 4.2 : object instanceof Player ? 8.5 : projectile ? 13 : object instanceof StageBoss ? 7 : 9;
+    const maxSpeed = localPlayerObject ? 180 : object instanceof Player ? 620 : projectile ? 1200 : object instanceof StageBoss ? 520 : 720;
+    const blend = 1 - Math.exp(-response * dt);
+    const dx = object.netSyncX - object.x;
+    const dy = object.netSyncY - object.y;
+    object.x += clamp(dx * blend, -maxSpeed * dt, maxSpeed * dt);
+    object.y += clamp(dy * blend, -maxSpeed * dt, maxSpeed * dt);
+    if (Number.isFinite(object.netSyncVx)) object.vx += (object.netSyncVx - object.vx) * Math.min(1, blend * 0.72);
+    if (Number.isFinite(object.netSyncVy)) object.vy += (object.netSyncVy - object.vy) * Math.min(1, blend * 0.72);
+    if (Math.abs(dx) < 0.45 && Math.abs(dy) < 0.45) {
+      object.x = object.netSyncX;
+      object.y = object.netSyncY;
+      object.netSyncX = undefined;
+      object.netSyncY = undefined;
+    }
+  }
+
+  function reconcileNetworkWorld(dt) {
+    if (!onlineSession() || isNetworkAuthority()) return;
+    for (const list of [players, enemies, bullets, enemyBullets, pickups, setPieces, hazards]) {
+      for (const object of list) reconcileNetworkObject(object, dt);
+    }
+    reconcileNetworkObject(activeBoss, dt);
+    if (Number.isFinite(net.clockTarget)) {
+      const difference = net.clockTarget - time;
+      if (Math.abs(difference) > 1.5) time = net.clockTarget;
+      else time += clamp(difference * 0.08, -0.012, 0.012);
+      if (Math.abs(net.clockTarget - time) < 0.01) net.clockTarget = null;
+    }
+  }
+
+  function queueNetworkSnapshot(snapshot) {
+    if (!snapshot || typeof snapshot !== "object") return;
+    const sequence = Math.max(0, Number(snapshot.seq) || 0);
+    const queuedSequence = Math.max(0, Number(net.pendingSnapshot && net.pendingSnapshot.seq) || 0);
+    if (sequence && sequence <= Math.max(net.lastSnapshotSeq, queuedSequence)) return;
+    net.pendingSnapshot = snapshot;
+    net.lastSnapshotAt = performance.now();
   }
 
   function packBossArenaState() {
@@ -9131,10 +9310,13 @@
   }
 
   function makeNetworkSnapshot() {
+    const simulationView = gameplaySimulationView();
     return {
       t: "state",
       seq: ++net.snapshotSeq,
       clock: time,
+      simulationX: simulationView.left,
+      simulationY: simulationView.top,
       campaignLevel,
       checkpointX,
       levelState,
@@ -9149,7 +9331,6 @@
       enemyBullets: enemyBullets.map(packNetworkObject),
       pickups: pickups.map(packNetworkObject),
       setPieces: setPieces.map(packNetworkObject),
-      debris: debris.map(packNetworkObject),
       hazards: hazards.map(packNetworkObject),
       activeBoss: packNetworkObject(activeBoss),
       bossArena: packBossArenaState()
@@ -9161,7 +9342,9 @@
     const sequence = Math.max(0, Number(snapshot.seq) || 0);
     if (sequence && sequence <= net.lastSnapshotSeq) return;
     net.lastSnapshotSeq = sequence;
-    if (Number.isFinite(snapshot.clock) && Math.abs(snapshot.clock - time) > 0.25) time = snapshot.clock;
+    if (Number.isFinite(snapshot.clock)) net.clockTarget = snapshot.clock;
+    if (Number.isFinite(snapshot.simulationX)) net.simulationX = snapshot.simulationX;
+    if (Number.isFinite(snapshot.simulationY)) net.simulationY = snapshot.simulationY;
     if (Number.isFinite(snapshot.randomState)) gameRandomState = Number(snapshot.randomState) >>> 0;
     if (Number.isFinite(snapshot.entityCounter)) networkEntityCounter = Math.max(1, Number(snapshot.entityCounter) | 0);
     if (Number.isFinite(snapshot.checkpointX)) checkpointX = snapshot.checkpointX;
@@ -9176,11 +9359,11 @@
     if (Array.isArray(snapshot.defeatedBosses)) defeatedBosses = new Set(snapshot.defeatedBosses);
     players = mergeNetworkList(players, snapshot.players);
     enemies = mergeNetworkList(enemies, snapshot.enemies);
-    bullets = mergeNetworkList(bullets, snapshot.bullets);
+    bullets = mergeNetworkList(bullets, snapshot.bullets, bullet =>
+      bullet.owner === net.localId && !bullet.dead && time - Number(bullet.netBornAt || 0) < 0.45);
     enemyBullets = mergeNetworkList(enemyBullets, snapshot.enemyBullets);
     pickups = mergeNetworkList(pickups, snapshot.pickups);
     setPieces = mergeNetworkList(setPieces, snapshot.setPieces);
-    debris = mergeNetworkList(debris, snapshot.debris);
     hazards = mergeNetworkList(hazards, snapshot.hazards);
     if (snapshot.activeBoss) {
       activeBoss = restoreNetworkObject(snapshot.activeBoss, activeBoss && activeBoss.netId === snapshot.activeBoss.netId ? activeBoss : null);
@@ -9192,12 +9375,18 @@
 
   function updateNetwork(dt) {
     if (!onlineSession() || !running) return;
+    if (!isNetworkAuthority() && net.pendingSnapshot) {
+      const snapshot = net.pendingSnapshot;
+      net.pendingSnapshot = null;
+      applyNetworkSnapshot(snapshot);
+    }
     captureNetworkInput();
+    reconcileNetworkWorld(dt);
     if (isNetworkAuthority()) {
       net.stateSendAt -= dt;
       if (net.stateSendAt <= 0) {
-        net.stateSendAt = 0.25;
-        sendServer(makeNetworkSnapshot());
+        const sent = sendServer(makeNetworkSnapshot());
+        net.stateSendAt = sent ? 0.20 : 0.06;
       }
     }
   }
@@ -9223,6 +9412,12 @@
     net.localInput = neutralNetworkInput();
     net.lastSnapshotSeq = 0;
     net.pendingStartSnapshot = null;
+    net.pendingSnapshot = null;
+    net.clockTarget = null;
+    net.lastSnapshotAt = 0;
+    net.droppedStatePackets = 0;
+    net.simulationX = null;
+    net.simulationY = null;
     onlineMenuOpen = false;
     if (!preserveRoom) net.roomCode = "";
     net.manualClose = false;
@@ -9282,7 +9477,7 @@
       menuScreen = "lobby";
       if (message.phase === "playing" && message.start) {
         startOnlineMatch(message.start);
-        if (message.snapshot) applyNetworkSnapshot(message.snapshot);
+        if (message.snapshot) queueNetworkSnapshot(message.snapshot);
       }
       return;
     }
@@ -9312,7 +9507,7 @@
       return;
     }
     if (message.t === "state") {
-      if (!isNetworkAuthority()) applyNetworkSnapshot(message);
+      if (!isNetworkAuthority()) queueNetworkSnapshot(message);
       return;
     }
     if (message.t === "returnLobby") {
@@ -9513,8 +9708,10 @@
     net.localInput = neutralNetworkInput();
     net.lastSnapshotSeq = 0;
     net.snapshotSeq = 0;
+    net.pendingSnapshot = null;
+    net.clockTarget = null;
     begin();
-    if (message.snapshot) applyNetworkSnapshot(message.snapshot);
+    if (message.snapshot) queueNetworkSnapshot(message.snapshot);
   }
 
   function requestOnlineStart() {
@@ -9966,7 +10163,7 @@
     [4400, () => { checkpointX = 4372.5; showBanner("ROOFTOP CHECKPOINT"); audio.checkpoint(); }],
     [5087.5, () => {
       const count = scaledEncounterCount(3, 3, 4, 5);
-      for (let i = 0; i < count; i++) debris.push(new FallingDebris((5458.75 + i * 199.38), cameraY - 90, rand(28, 42), true));
+      for (let i = 0; i < count; i++) debris.push(new FallingDebris((5458.75 + i * 199.38), gameplaySimulationView().top - 90, rand(28, 42), true));
     }],
     [5843.75, () => startBoss("cityWalker", 6627.5)],
     [7232.5, () => { checkpointX = 7356.25; }],
@@ -9975,7 +10172,7 @@
     [9872.5, () => {
       checkpointX = 9320; showBanner("COLLAPSE CROSSING"); audio.checkpoint();
       const count = scaledEncounterCount(3, 4, 5, 6);
-      for (let i = 0; i < count; i++) debris.push(new FallingDebris((10367.5 + i * 206.25), cameraY - 110, rand(28, 44), true));
+      for (let i = 0; i < count; i++) debris.push(new FallingDebris((10367.5 + i * 206.25), gameplaySimulationView().top - 110, rand(28, 44), true));
     }],
     [12127.5, () => startBoss("cityOmega", 12746.25)],
 
@@ -9989,7 +10186,7 @@
       checkpointX = 21934.09;
       showBanner("WINDOW TOWER RUN");
       const count = scaledEncounterCount(4, 5, 6, 7);
-      for (let i = 0; i < count; i++) debris.push(new FallingDebris((22392.27 + i * 186.14), cameraY - 100, 32, true));
+      for (let i = 0; i < count; i++) debris.push(new FallingDebris((22392.27 + i * 186.14), gameplaySimulationView().top - 100, 32, true));
     }],
     [23437.5, () => { checkpointX = 23437.5; showBanner("RAIL DECK"); audio.checkpoint(); }],
     [24769.09, () => startBoss("neonRail", 25399.09)],
@@ -10030,7 +10227,7 @@
     [70887.5, () => showBanner("CITADEL CLOCKWORK")],
     [72675, () => {
       const count = scaledEncounterCount(4, 6, 8, 10);
-      for (let i = 0; i < count; i++) debris.push(new FallingDebris((73087.5 + i * 165), cameraY - 125, 42, true));
+      for (let i = 0; i < count; i++) debris.push(new FallingDebris((73087.5 + i * 165), gameplaySimulationView().top - 125, 42, true));
     }],
     [73610, () => startEmperorEchoAmbush()],
     [74462.5, () => { checkpointX = 74462.5; showBanner("EMPEROR'S GATE"); audio.checkpoint(); }],
@@ -10599,8 +10796,9 @@
 
   function resolveEnemySpacing() {
     enemySpacingScratch.length = 0;
-    const minX = cameraX - 180;
-    const maxX = cameraX + visibleWorldW + 180;
+    const simulationView = gameplaySimulationView();
+    const minX = simulationView.left - 180;
+    const maxX = simulationView.right + 180;
     for (const enemy of enemies) {
       if (!enemy.dead && enemy.grounded && enemy.x + enemy.w >= minX && enemy.x <= maxX) {
         enemySpacingScratch.push(enemy);
@@ -10896,8 +11094,8 @@
     } else if (levelState === "crash") {
       desiredX = cameraHoldX ?? cameraX;
     } else {
-      const lead = leadingPlayerX(true);
-      desiredX = lead > 0 ? lead - visibleWorldW * 0.34 : cameraX;
+      const focusPlayer = cameraFocusPlayer();
+      desiredX = focusPlayer ? focusPlayer.cx - visibleWorldW * 0.34 : cameraX;
     }
 
     cameraTargetX = clamp(desiredX, bounds.min, bounds.max);
@@ -10913,7 +11111,7 @@
     if (Math.abs(cameraTargetX - cameraX) < 0.02) cameraX = cameraTargetX;
     cameraX = clamp(cameraX, bounds.min, bounds.max);
 
-    const leadPlayer = frontAlivePlayer();
+    const leadPlayer = cameraFocusPlayer();
     const introFocus = stageIntro && stageIntro.sequence ? stageIntro.targetX : null;
     const terrainFocusX = introFocus ?? (leadPlayer ? leadPlayer.cx : cameraX + visibleWorldW * 0.36);
     const terrainY = terrainSurfaceY(terrainFocusX);
@@ -12415,7 +12613,7 @@
     ctx.fillStyle = UI_THEME.muted;
     ctx.font = `700 ${7 * scale}px ${UI_FONT}`;
     ctx.textAlign = "right";
-    ctx.fillText("v8.3.4 ONLINE", x + panelW - 8 * scale, y + panelH - 7 * scale);
+    ctx.fillText("v8.4.0 ONLINE", x + panelW - 8 * scale, y + panelH - 7 * scale);
   }
 
 
@@ -12674,7 +12872,7 @@
     ctx.fillStyle = UI_THEME.muted;
     ctx.font = `700 ${7 * scale}px ${UI_FONT}`;
     ctx.textAlign = "right";
-    ctx.fillText("v8.3.4 ONLINE", x + panelW - 8 * scale, y + panelH - 7 * scale);
+    ctx.fillText("v8.4.0 ONLINE", x + panelW - 8 * scale, y + panelH - 7 * scale);
   }
 
   function drawCharacterPreview(profile, cx, cy, scale, selected = false) {
@@ -12839,7 +13037,7 @@
     ctx.fillStyle = UI_THEME.muted;
     ctx.font = `700 ${7 * scale}px ${UI_FONT}`;
     ctx.textAlign = "right";
-    ctx.fillText("v8.3.4 ONLINE", x + panelW - 8 * scale, y + panelH - 7 * scale);
+    ctx.fillText("v8.4.0 ONLINE", x + panelW - 8 * scale, y + panelH - 7 * scale);
   }
 
   function drawCanvasMenu() {
