@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>Iron Reign: Urban Assault v8.5.0 Online</title>
+<title>Iron Reign: Urban Assault v8.6.0 Online</title>
 <style>
   :root {
     --safe-top: env(safe-area-inset-top, 0px);
@@ -43,7 +43,7 @@
 (() => {
   "use strict";
 
-  // IRON REIGN ONLINE v8.5.0 BOSS FLOW AND VISUAL CLARITY
+  // IRON REIGN ONLINE v8.6.0 UNIFIED GAME UI
 
   const canvas = document.getElementById("game");
   const ctx = canvas.getContext("2d", { alpha: false });
@@ -80,7 +80,7 @@
   });
 
   const MULTIPLAYER_PROTOCOL = 1;
-  const MULTIPLAYER_VERSION = "iron-reign-online-8.5.0";
+  const MULTIPLAYER_VERSION = "iron-reign-online-8.6.0";
   const ROOM_CODE_LENGTH = 5;
   const MAX_ONLINE_PLAYERS = 4;
   const ONLINE_API = ["localhost", "127.0.0.1"].includes(location.hostname)
@@ -12629,7 +12629,7 @@
     ctx.fillStyle = UI_THEME.muted;
     ctx.font = `700 ${7 * scale}px ${UI_FONT}`;
     ctx.textAlign = "right";
-    ctx.fillText("v8.5.0 ONLINE", x + panelW - 8 * scale, y + panelH - 7 * scale);
+    ctx.fillText("v8.6.0 ONLINE", x + panelW - 8 * scale, y + panelH - 7 * scale);
   }
 
 
@@ -12888,7 +12888,7 @@
     ctx.fillStyle = UI_THEME.muted;
     ctx.font = `700 ${7 * scale}px ${UI_FONT}`;
     ctx.textAlign = "right";
-    ctx.fillText("v8.5.0 ONLINE", x + panelW - 8 * scale, y + panelH - 7 * scale);
+    ctx.fillText("v8.6.0 ONLINE", x + panelW - 8 * scale, y + panelH - 7 * scale);
   }
 
   function drawCharacterPreview(profile, cx, cy, scale, selected = false) {
@@ -13053,7 +13053,7 @@
     ctx.fillStyle = UI_THEME.muted;
     ctx.font = `700 ${7 * scale}px ${UI_FONT}`;
     ctx.textAlign = "right";
-    ctx.fillText("v8.5.0 ONLINE", x + panelW - 8 * scale, y + panelH - 7 * scale);
+    ctx.fillText("v8.6.0 ONLINE", x + panelW - 8 * scale, y + panelH - 7 * scale);
   }
 
   function drawCanvasMenu() {
@@ -13121,22 +13121,49 @@
     return { w, h };
   }
 
-  function drawOnlineMenuAccessButton() {
-    if (!onlineSession() || !running || onlineMenuOpen) return;
+  function gameUiMode() {
+    if (!running) return "menu";
+    if (paused || onlineMenuOpen) return "game_menu";
+    if (stageIntro || levelTransition || portalWarp) return "cinematic";
+    return "gameplay";
+  }
+
+  function drawGameMenuAccessButton() {
+    uiRects.mute = null;
+    uiRects.fullscreen = null;
+    if (!running || gameUiMode() === "game_menu" || endingScene) {
+      uiRects.pause = null;
+      return;
+    }
+
     const scale = uiScaleFactor();
     const pad = 7 * scale;
-    const topPad = pad + safeTop;
-    const utilitySize = (touchUi ? 29 : 27) * scale;
-    const utilityH = 27 * scale;
-    const utilityRight = screenW - safeRight - pad;
+    const size = (touchUi ? 31 : 29) * scale;
+    const height = 29 * scale;
     uiRects.pause = {
-      x: utilityRight - utilitySize,
-      y: topPad,
-      w: utilitySize,
-      h: utilityH
+      x: screenW - safeRight - pad - size,
+      y: safeTop + pad,
+      w: size,
+      h: height
     };
-    drawPixelPanel(uiRects.pause.x, uiRects.pause.y, uiRects.pause.w, uiRects.pause.h, UI_THEME.panel, UI_THEME.border, false);
-    drawUiIcon("pause", uiRects.pause.x + uiRects.pause.w / 2, uiRects.pause.y + uiRects.pause.h / 2, 11.5 * scale, UI_THEME.blue, 1.8 * scale);
+
+    drawPixelPanel(
+      uiRects.pause.x,
+      uiRects.pause.y,
+      uiRects.pause.w,
+      uiRects.pause.h,
+      UI_THEME.panel,
+      UI_THEME.border,
+      false
+    );
+    drawUiIcon(
+      "menu",
+      uiRects.pause.x + uiRects.pause.w / 2,
+      uiRects.pause.y + uiRects.pause.h / 2,
+      12 * scale,
+      UI_THEME.blue,
+      1.8 * scale
+    );
   }
 
   function drawCanvasHud() {
@@ -13145,33 +13172,6 @@
     const pad = 7 * scale;
     const topPad = pad + safeTop;
     const card = (localPlayer() || players[0]) ? drawHealthCard(localPlayer() || players[0], pad + safeLeft, topPad) : { w: 0, h: 44 * scale };
-
-    const utilitySize = (touchUi ? 29 : 27) * scale;
-    const utilityH = 27 * scale;
-    const utilityGap = 5 * scale;
-    const utilityRight = screenW - safeRight - pad;
-    const utilityY = topPad;
-    uiRects.mute = { x: utilityRight - utilitySize, y: utilityY, w: utilitySize, h: utilityH };
-    uiRects.fullscreen = { x: uiRects.mute.x - utilityGap - utilitySize, y: utilityY, w: utilitySize, h: utilityH };
-    uiRects.pause = { x: uiRects.fullscreen.x - utilityGap - utilitySize, y: utilityY, w: utilitySize, h: utilityH };
-
-    const utilities = [
-      [uiRects.pause, paused ? "play" : "pause", UI_THEME.blue, UI_THEME.border],
-      [uiRects.fullscreen, "fullscreen", fullscreenActive() ? UI_THEME.blueBright : UI_THEME.blue, fullscreenActive() ? UI_THEME.blueBright : UI_THEME.border],
-      [uiRects.mute, "music", audio.musicMuted ? UI_THEME.danger : UI_THEME.blue, audio.musicMuted ? UI_THEME.danger : UI_THEME.border]
-    ];
-    for (const [rect, icon, color, edge] of utilities) {
-      drawPixelPanel(rect.x, rect.y, rect.w, rect.h, UI_THEME.panel, edge, false);
-      drawUiIcon(icon, rect.x + rect.w / 2, rect.y + rect.h / 2, 11.5 * scale, color, 1.8 * scale);
-    }
-    if (audio.musicMuted) {
-      ctx.strokeStyle = UI_THEME.danger;
-      ctx.lineWidth = 1.8 * scale;
-      ctx.beginPath();
-      ctx.moveTo(uiRects.mute.x + 6 * scale, uiRects.mute.y + 5 * scale);
-      ctx.lineTo(uiRects.mute.x + uiRects.mute.w - 6 * scale, uiRects.mute.y + uiRects.mute.h - 5 * scale);
-      ctx.stroke();
-    }
 
     const progressW = narrow
       ? Math.min(screenW - (safeLeft + safeRight + 34 * scale), 226 * scale)
@@ -13509,44 +13509,52 @@
     ctx.fillStyle = "rgba(0,0,0,.72)";
     ctx.fillRect(0, 0, screenW, screenH);
 
-    const w = Math.min((stacked ? 390 : 430) * scale, screenW * 0.88);
-    const h = Math.min((stacked ? 250 : 150) * scale, screenH * 0.72);
+    const w = Math.min((stacked ? 390 : 470) * scale, screenW * 0.90);
+    const h = Math.min((stacked ? 286 : 190) * scale, screenH * 0.80);
     const px = screenW / 2 - w / 2;
     const py = screenH / 2 - h / 2;
     drawPixelPanel(px, py, w, h, UI_THEME.panel, UI_THEME.border, true);
 
-    drawUiIcon("pause", screenW / 2 - 54 * scale, py + 34 * scale, 19 * scale, UI_THEME.blue, 2.5 * scale);
+    drawUiIcon("menu", screenW / 2 - 58 * scale, py + 32 * scale, 19 * scale, UI_THEME.blue, 2.5 * scale);
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
     ctx.font = `900 ${18 * scale}px ${UI_FONT}`;
     ctx.fillStyle = UI_THEME.text;
-    ctx.fillText(onlineMenuOpen ? "ONLINE MENU" : "PAUSED", screenW / 2 - 28 * scale, py + 34 * scale);
+    ctx.fillText(onlineMenuOpen ? "ONLINE MENU" : "GAME MENU", screenW / 2 - 31 * scale, py + 32 * scale);
     ctx.textAlign = "center";
     ctx.fillStyle = UI_THEME.muted;
     ctx.font = `800 ${7.5 * scale}px ${UI_FONT}`;
-    ctx.fillText(onlineMenuOpen ? "THE MATCH CONTINUES WHILE THIS MENU IS OPEN" : `${(localPlayer() || players[0])?.profile.name || "OPERATIVE"} • ${(localPlayer() || players[0])?.profile.power || "POWER"}`, screenW / 2, py + 58 * scale);
+    ctx.fillText(
+      onlineMenuOpen ? "THE MATCH CONTINUES WHILE THIS MENU IS OPEN" : "GAMEPLAY IS PAUSED",
+      screenW / 2,
+      py + 55 * scale
+    );
 
     const gap = 8 * scale;
     const sidePad = 12 * scale;
-    const buttonH = (stacked ? 42 : 39) * scale;
+    const buttonH = (stacked ? 39 : 38) * scale;
+    let utilityY;
+
     if (stacked) {
       const buttonW = w - sidePad * 2;
-      const firstY = py + 78 * scale;
+      const firstY = py + 73 * scale;
       uiRects.pause = { x: px + sidePad, y: firstY, w: buttonW, h: buttonH };
       uiRects.pauseRestart = { x: px + sidePad, y: firstY + buttonH + gap, w: buttonW, h: buttonH };
       uiRects.pauseMenu = { x: px + sidePad, y: firstY + (buttonH + gap) * 2, w: buttonW, h: buttonH };
+      utilityY = uiRects.pauseMenu.y + buttonH + gap;
     } else {
       const buttonW = (w - sidePad * 2 - gap * 2) / 3;
-      const buttonY = py + h - buttonH - 13 * scale;
+      const buttonY = py + 76 * scale;
       uiRects.pause = { x: px + sidePad, y: buttonY, w: buttonW, h: buttonH };
       uiRects.pauseRestart = { x: uiRects.pause.x + buttonW + gap, y: buttonY, w: buttonW, h: buttonH };
       uiRects.pauseMenu = { x: uiRects.pauseRestart.x + buttonW + gap, y: buttonY, w: buttonW, h: buttonH };
+      utilityY = buttonY + buttonH + gap;
     }
 
     const actions = [
       [uiRects.pause, "play", onlineMenuOpen ? "CONTINUE" : "RESUME", UI_THEME.blueBright],
       [uiRects.pauseRestart, "restart", onlineMenuOpen && !isRoomOwner() ? "HOST RESTART" : "RESTART", onlineMenuOpen && !isRoomOwner() ? UI_THEME.muted : UI_THEME.warning],
-      [uiRects.pauseMenu, "menu", onlineMenuOpen ? (isRoomOwner() ? "RETURN TO LOBBY" : "LEAVE MATCH") : "MENU", UI_THEME.muted]
+      [uiRects.pauseMenu, "back", onlineMenuOpen ? (isRoomOwner() ? "RETURN TO LOBBY" : "LEAVE MATCH") : "MAIN MENU", UI_THEME.muted]
     ];
     for (const [rect, icon, label, color] of actions) {
       drawPixelPanel(rect.x, rect.y, rect.w, rect.h, UI_THEME.panelActive, color, false);
@@ -13554,12 +13562,40 @@
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
       ctx.fillStyle = UI_THEME.text;
-      const labelSize = fitCanvasText(label, rect.w - 32 * scale, 9 * scale, 6.4 * scale);
+      const labelSize = fitCanvasText(label, rect.w - 32 * scale, 9 * scale, 6.2 * scale);
       ctx.font = `900 ${labelSize}px ${UI_FONT}`;
       ctx.fillText(label, rect.x + 32 * scale, rect.y + rect.h / 2 + 0.5 * scale);
     }
-  }
 
+    const utilityGap = 8 * scale;
+    const utilityH = 34 * scale;
+    const utilityW = (w - sidePad * 2 - utilityGap) / 2;
+    uiRects.mute = { x: px + sidePad, y: utilityY, w: utilityW, h: utilityH };
+    uiRects.fullscreen = { x: uiRects.mute.x + utilityW + utilityGap, y: utilityY, w: utilityW, h: utilityH };
+
+    const utilities = [
+      [uiRects.mute, "music", audio.musicMuted ? "MUSIC OFF" : "MUSIC ON", audio.musicMuted ? UI_THEME.danger : UI_THEME.blue],
+      [uiRects.fullscreen, "fullscreen", fullscreenActive() ? "EXIT FULLSCREEN" : "FULLSCREEN", fullscreenActive() ? UI_THEME.blueBright : UI_THEME.blue]
+    ];
+    for (const [rect, icon, label, color] of utilities) {
+      drawPixelPanel(rect.x, rect.y, rect.w, rect.h, UI_THEME.panelRaised, UI_THEME.borderMuted, false);
+      drawUiIcon(icon, rect.x + 16 * scale, rect.y + rect.h / 2, 10 * scale, color, 1.6 * scale);
+      ctx.textAlign = "left";
+      ctx.fillStyle = UI_THEME.muted;
+      const labelSize = fitCanvasText(label, rect.w - 31 * scale, 7.5 * scale, 5.5 * scale);
+      ctx.font = `800 ${labelSize}px ${UI_FONT}`;
+      ctx.fillText(label, rect.x + 30 * scale, rect.y + rect.h / 2 + 0.5 * scale);
+    }
+
+    if (audio.musicMuted) {
+      ctx.strokeStyle = UI_THEME.danger;
+      ctx.lineWidth = 1.6 * scale;
+      ctx.beginPath();
+      ctx.moveTo(uiRects.mute.x + 7 * scale, uiRects.mute.y + 7 * scale);
+      ctx.lineTo(uiRects.mute.x + 24 * scale, uiRects.mute.y + uiRects.mute.h - 7 * scale);
+      ctx.stroke();
+    }
+  }
 
 
   function draw() {
@@ -13622,16 +13658,15 @@
     if (victoryScene) victoryScene.drawOverlay();
     if (levelTransition) {
       drawLevelTransitionOverlay();
-      drawOnlineMenuAccessButton();
     } else if (stageIntro) {
       drawStageIntroOverlay();
-      drawOnlineMenuAccessButton();
     } else {
       drawCanvasHud();
       drawCanvasTouchControls();
       drawMouseCrosshair();
     }
 
+    drawGameMenuAccessButton();
     if (paused || onlineMenuOpen) drawPauseOverlay();
   }
 
@@ -13990,7 +14025,9 @@
     if ((paused || onlineMenuOpen) && point) {
       interactive = uiRectContains(uiRects.pause, point.x, point.y) ||
         uiRectContains(uiRects.pauseRestart, point.x, point.y) ||
-        uiRectContains(uiRects.pauseMenu, point.x, point.y);
+        uiRectContains(uiRects.pauseMenu, point.x, point.y) ||
+        uiRectContains(uiRects.mute, point.x, point.y) ||
+        uiRectContains(uiRects.fullscreen, point.x, point.y);
     }
     canvas.style.cursor = interactive ? "pointer" : "default";
   }
@@ -14035,6 +14072,8 @@
       if (uiRectContains(uiRects.pause, point.x, point.y)) togglePause();
       else if (uiRectContains(uiRects.pauseRestart, point.x, point.y)) restartCurrentLevel();
       else if (uiRectContains(uiRects.pauseMenu, point.x, point.y)) returnToMenu();
+      else if (uiRectContains(uiRects.mute, point.x, point.y)) audio.toggleMusic();
+      else if (uiRectContains(uiRects.fullscreen, point.x, point.y)) toggleFullscreen();
       return;
     }
 
