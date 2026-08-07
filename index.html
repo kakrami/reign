@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>Iron Reign: Urban Assault v8.8.0 Online</title>
+<title>Iron Reign: Urban Assault v8.9.0 Online</title>
 <style>
   :root {
     --safe-top: env(safe-area-inset-top, 0px);
@@ -43,7 +43,7 @@
 (() => {
   "use strict";
 
-  // IRON REIGN ONLINE v8.8.0 UNIFIED GAME UI
+  // IRON REIGN ONLINE v8.9.0 UNIFIED GAME UI
 
   const canvas = document.getElementById("game");
   const ctx = canvas.getContext("2d", { alpha: false });
@@ -80,7 +80,7 @@
   });
 
   const MULTIPLAYER_PROTOCOL = 1;
-  const MULTIPLAYER_VERSION = "iron-reign-online-8.8.0";
+  const MULTIPLAYER_VERSION = "iron-reign-online-8.9.0";
   const ROOM_CODE_LENGTH = 5;
   const MAX_ONLINE_PLAYERS = 4;
   const ONLINE_API = ["localhost", "127.0.0.1"].includes(location.hostname)
@@ -1652,6 +1652,7 @@
   const audio = new Sound();
 
   let networkEntityCounter = 1;
+  let localPredictedEntityCounter = -1;
 
   class Entity {
     constructor(x, y, w, h) {
@@ -2016,6 +2017,7 @@
     }
 
     fallOut() {
+      if (onlineSession() && !isNetworkAuthority()) return;
       if (this.dead) return;
       this.health = 0;
       this.lives--;
@@ -2198,6 +2200,12 @@
     }
 
     fire() {
+      // Online guests predict only their own muzzle/projectiles. Remote players and
+      // all authoritative combat objects are created by the room authority.
+      if (onlineSession() && !isNetworkAuthority() && this.index !== net.localId) {
+        this.fireCooldown = Math.max(this.fireCooldown, 0.08);
+        return;
+      }
       if (Math.abs(this.aimX) > 0.01) this.facing = this.aimX < 0 ? -1 : 1;
       const spinningBurst = !this.onGround && this.jumpCount >= 2 && !this.smashing && this.weapon !== 3;
       if (spinningBurst) {
@@ -2237,7 +2245,7 @@
 
       for (const offset of angles) {
         const angle = base + offset;
-        bullets.push(new Bullet(
+        const projectile = new Bullet(
           originX,
           originY,
           Math.cos(angle) * speed,
@@ -2245,7 +2253,9 @@
           this.index,
           damage,
           type
-        ));
+        );
+        if (onlineSession() && !isNetworkAuthority()) projectile.netId = localPredictedEntityCounter--;
+        bullets.push(projectile);
       }
 
       this.fireCooldown = cooldown;
@@ -2266,7 +2276,7 @@
       const launchRadius = 28;
       for (let i = 0; i < profile.count; i++) {
         const angle = phase + i * Math.PI * 2 / profile.count;
-        bullets.push(new Bullet(
+        const projectile = new Bullet(
           this.cx + Math.cos(angle) * launchRadius,
           this.cy + Math.sin(angle) * launchRadius,
           Math.cos(angle) * profile.speed,
@@ -2274,7 +2284,9 @@
           this.index,
           profile.damage,
           profile.type
-        ));
+        );
+        if (onlineSession() && !isNetworkAuthority()) projectile.netId = localPredictedEntityCounter--;
+        bullets.push(projectile);
       }
 
       this.spinShotPhase = (this.spinShotPhase + Math.PI / profile.count) % (Math.PI * 2);
@@ -2296,6 +2308,7 @@
     }
 
     hit(damage, knockbackDirection = 0) {
+      if (onlineSession() && !isNetworkAuthority()) return;
       if (levelState === "vehicle" || levelState === "crash") return;
       if (this.invuln > 0 || this.dead) return;
 
@@ -2873,6 +2886,7 @@
     }
 
     takeHit(damage, owner) {
+      if (onlineSession() && !isNetworkAuthority()) return;
       if (this.dead) return;
       this.health -= damage;
       burst(this.cx, this.cy, "#fff2a4", 5, 145);
@@ -3941,6 +3955,7 @@
     }
 
     hit(damage, owner) {
+      if (onlineSession() && !isNetworkAuthority()) return;
       this.health -= damage;
       this.flashTimer = 0.07;
       burst(this.cx, this.cy, "#ffc66e", 3, 135);
@@ -5372,6 +5387,7 @@
     }
 
     hit(damage, owner) {
+      if (onlineSession() && !isNetworkAuthority()) return;
       if (this.introTimer > 0) return;
       if (bossArena && bossArena.boss === this && !bossArena.combatReady) {
         this.armorPulse = 0.12;
@@ -6515,6 +6531,7 @@
     }
 
     hit(damage, owner) {
+      if (onlineSession() && !isNetworkAuthority()) return;
       if (this.finalEncounter) {
         super.hit(damage, owner);
         return;
@@ -6641,13 +6658,15 @@
   }
 
   class BossVictoryScene {
-    constructor(boss) {
+    constructor(boss, replica = false) {
       this.x = boss.x;
       this.y = boss.y;
       this.w = boss.w;
       this.h = boss.h;
       this.name = boss.name;
+      this.bossKey = boss.key || "";
       this.profile = boss.profile;
+      this.replica = Boolean(replica);
       this.major = Number.isInteger(boss.profile.levelEnd) || boss.profile.campaignFinal;
       this.final = Boolean(boss.profile.campaignFinal);
       this.duration = this.final ? 6.4 : this.major ? 5.0 : 3.8;
@@ -6664,7 +6683,7 @@
       bannerUntil = 0;
       bannerText = "";
 
-      levelState = "victory";
+      if (!this.replica) levelState = "victory";
       enemyBullets = [];
       bullets = [];
       for (const player of players) {
@@ -6672,7 +6691,7 @@
         player.entryTimer = Math.max(player.entryTimer, this.duration);
         player.victoryPose = this.duration;
         player.invuln = Math.max(player.invuln, this.duration);
-        player.addScore(this.bonus);
+        if (!this.replica) player.addScore(this.bonus);
       }
       audio.victoryFanfare(this.major, this.final);
     }
@@ -6712,6 +6731,7 @@
           player.entryTimer = 0;
           player.victoryPose = 0;
         }
+        if (this.replica) return;
         if (Number.isInteger(this.profile.levelEnd) && !this.final) {
           startLevelTransition(this.profile.levelEnd + 1);
         } else if (this.final) {
@@ -7250,6 +7270,7 @@
         if (this.y > WORLD_H + 220 || this.life <= 0) this.dead = true;
       }
 
+      if (onlineSession() && !isNetworkAuthority()) return;
       for (const player of players) {
         if (!player.dead && this.overlaps(player) && player.upgrade(this.type)) {
           this.dead = true;
@@ -7488,14 +7509,16 @@
       this.vy += GRAVITY * 0.72 * dt;
       this.y += this.vy * dt;
 
-      for (const player of players) {
-        if (!player.dead && !this.hit && this.overlaps(player)) {
-          this.hit = true;
-          audio.impact(1.15, "metal");
-          player.hit(20 * enemyDamageScale());
-          this.dead = true;
-          burst(this.cx, this.cy, "#77706a", 12, 180);
-          return;
+      if (!onlineSession() || isNetworkAuthority()) {
+        for (const player of players) {
+          if (!player.dead && !this.hit && this.overlaps(player)) {
+            this.hit = true;
+            audio.impact(1.15, "metal");
+            player.hit(20 * enemyDamageScale());
+            this.dead = true;
+            burst(this.cx, this.cy, "#77706a", 12, 180);
+            return;
+          }
         }
       }
 
@@ -7561,6 +7584,7 @@
 
       if (t < 1) return;
       this.dead = true;
+      if (onlineSession() && !isNetworkAuthority()) return;
       explode(this.targetX, this.targetY, this.color, 18 + this.tier * 4, true, 1);
       blastEffects.push(new BlastEffect(this.targetX, this.targetY, this.color, this.tier >= 2 ? 2 : 1));
       for (const player of players) {
@@ -7647,6 +7671,7 @@
     isDangerous() { return this.active && !this.dead; }
 
     damagePlayer(player) {
+      if (onlineSession() && !isNetworkAuthority()) return;
       if (!(this.hitPlayers instanceof Set)) this.hitPlayers = new Set();
       if (this.hitPlayers.has(player.index)) return;
       this.hitPlayers.add(player.index);
@@ -7723,6 +7748,7 @@
     isDangerous() { return this.started && !this.dead; }
 
     damagePlayer(player) {
+      if (onlineSession() && !isNetworkAuthority()) return;
       if (!(this.hitPlayers instanceof Set)) this.hitPlayers = new Set();
       if (this.hitPlayers.has(player.index)) return;
       this.hitPlayers.add(player.index);
@@ -7829,6 +7855,7 @@
     isDangerous() { return this.started && !this.dead; }
 
     damagePlayer(player) {
+      if (onlineSession() && !isNetworkAuthority()) return;
       if (!(this.hitPlayers instanceof Set)) this.hitPlayers = new Set();
       if (this.hitPlayers.has(player.index)) return;
       this.hitPlayers.add(player.index);
@@ -7921,6 +7948,7 @@
     isDangerous() { return this.active && !this.dead; }
 
     damagePlayer(player) {
+      if (onlineSession() && !isNetworkAuthority()) return;
       if (!(this.hitPlayers instanceof Set)) this.hitPlayers = new Set();
       if (this.hitPlayers.has(player.index)) return;
       this.hitPlayers.add(player.index);
@@ -8020,6 +8048,7 @@
 
       if (progress >= 1) {
         this.dead = true;
+        if (onlineSession() && !isNetworkAuthority()) return;
         hazards.push(new GravityWell(this.targetX, this.targetY, this.color, this.tier));
         blastEffects.push(new BlastEffect(this.targetX, this.targetY, this.color, 1.2));
         burst(this.targetX, this.targetY, this.color, 18, 180);
@@ -8091,6 +8120,7 @@
       const activeElapsed = this.elapsed - this.formationDuration;
       const active = activeElapsed >= 0 && activeElapsed < this.activeDuration;
       if (!active) return;
+      if (onlineSession() && !isNetworkAuthority()) return;
 
       for (const player of players) {
         if (!(this.hitPlayers instanceof Set)) this.hitPlayers = new Set();
@@ -8219,6 +8249,7 @@
       this.life -= dt;
       if (!this.fired && this.delay <= 0) {
         this.fired = true;
+        if (onlineSession() && !isNetworkAuthority()) return;
         const target = players.find(player => !player.dead);
         const base = target ? Math.atan2(target.cy - this.cy, target.cx - this.cx) : Math.PI;
         for (let i = -2; i <= 2; i++) {
@@ -8271,6 +8302,7 @@
       if (visible && this.bombs > 0 && this.dropTimer <= 0) {
         this.dropTimer = 0.46;
         this.bombs--;
+        if (onlineSession() && !isNetworkAuthority()) return;
         const target = players.find(player => !player.dead);
         const targetX = clamp((target ? target.cx + target.vx * 0.35 : this.cx) + rand(-120, 120), simulationView.left + 100, simulationView.right - 100);
         debris.push(new SiegeMortar(this.cx, this.cy, targetX, this.profile.accent, 0.05, 1));
@@ -9386,8 +9418,13 @@
   function restoreNetworkObject(row, existing = null) {
     if (!row || typeof row !== "object") return null;
     const prototypes = NETWORK_PROTOTYPES();
-    let object = existing;
-    const hadExisting = Boolean(existing);
+    const incomingType = typeof row.__type === "string" ? row.__type : "Entity";
+    const existingType = existing && existing.constructor && existing.constructor.name ? existing.constructor.name : null;
+    // A network id is never enough to reuse an object. A predicted/local object can
+    // share a numeric id with a later authoritative object after reconciliation.
+    // Reusing the wrong prototype corrupts that client and can crash its update loop.
+    let object = existingType === incomingType ? existing : null;
+    const hadExisting = Boolean(object);
     if (!object) {
       if (row.__type === "Player") object = new Player(row.index || 0, row.x || 0, row.characterIndex || 0);
       else if (row.__type === "Enemy") object = new Enemy(row.type || "runner", row.x || 0, (row.y || 0) + (row.h || 70));
@@ -9469,9 +9506,11 @@
 
   function mergeNetworkList(current, packedRows, preserve = null) {
     if (!Array.isArray(packedRows)) return current;
-    const byId = new Map(current.filter(Boolean).map(item => [item.netId, item]));
+    const objectKey = item => `${item && item.constructor ? item.constructor.name : "Entity"}:${item && item.netId}`;
+    const rowKey = row => `${row && row.__type ? row.__type : "Entity"}:${row && row.netId}`;
+    const byId = new Map(current.filter(Boolean).map(item => [objectKey(item), item]));
     const incomingIds = new Set(packedRows.map(row => row && row.netId));
-    const merged = packedRows.map(row => restoreNetworkObject(row, byId.get(row.netId))).filter(Boolean);
+    const merged = packedRows.map(row => restoreNetworkObject(row, byId.get(rowKey(row)))).filter(Boolean);
     if (typeof preserve === "function") {
       for (const item of current) {
         if (item && !incomingIds.has(item.netId) && preserve(item)) merged.push(item);
@@ -9503,7 +9542,7 @@
 
   function reconcileNetworkWorld(dt) {
     if (!onlineSession() || isNetworkAuthority()) return;
-    for (const list of [players, enemies, bullets, enemyBullets, pickups, setPieces, hazards]) {
+    for (const list of [players, enemies, bullets, enemyBullets, pickups, setPieces, hazards, debris]) {
       for (const object of list) reconcileNetworkObject(object, dt);
     }
     reconcileNetworkObject(activeBoss, dt);
@@ -9517,6 +9556,7 @@
 
   function queueNetworkSnapshot(snapshot) {
     if (!snapshot || typeof snapshot !== "object") return;
+    if (Number.isFinite(Number(snapshot.authorityId)) && Number(snapshot.authorityId) !== net.authorityId) return;
     const sequence = Math.max(0, Number(snapshot.seq) || 0);
     const queuedSequence = Math.max(0, Number(net.pendingSnapshot && net.pendingSnapshot.seq) || 0);
     if (sequence && sequence <= Math.max(net.lastSnapshotSeq, queuedSequence)) return;
@@ -9594,7 +9634,10 @@
     return {
       t: "state",
       seq: ++net.snapshotSeq,
+      authorityId: net.authorityId,
       clock: time,
+      bannerText: bannerText && performance.now() < bannerUntil ? bannerText : "",
+      bannerRemaining: Math.max(0, (bannerUntil - performance.now()) / 1000),
       simulationX: simulationView.left,
       simulationY: simulationView.top,
       simulationW: simulationView.width,
@@ -9602,6 +9645,15 @@
       campaignLevel,
       checkpointX,
       levelState,
+      levelTransition: packNetworkValue(levelTransition),
+      stageIntro: packNetworkValue(stageIntro),
+      victory: victoryScene ? {
+        bossKey: victoryScene.bossKey,
+        name: victoryScene.name,
+        x: victoryScene.x, y: victoryScene.y, w: victoryScene.w, h: victoryScene.h,
+        life: victoryScene.life, duration: victoryScene.duration, elapsed: victoryScene.elapsed,
+        bossScore: victoryScene.bossScore
+      } : null,
       gameOver,
       randomState: gameRandomState,
       entityCounter: networkEntityCounter,
@@ -9615,6 +9667,7 @@
       pickups: pickups.map(packNetworkObject),
       setPieces: setPieces.map(packNetworkObject),
       hazards: hazards.map(packNetworkObject),
+      debris: debris.map(packNetworkObject),
       activeBoss: packNetworkObject(activeBoss),
       bossArena: packBossArenaState()
     };
@@ -9622,6 +9675,8 @@
 
   function applyNetworkSnapshot(snapshot) {
     if (!snapshot || !running) return;
+    if (Number.isFinite(Number(snapshot.authorityId)) && Number(snapshot.authorityId) !== net.authorityId) return;
+    const previousBoss = activeBoss;
     const sequence = Math.max(0, Number(snapshot.seq) || 0);
     if (sequence && sequence <= net.lastSnapshotSeq) return;
     net.lastSnapshotSeq = sequence;
@@ -9632,8 +9687,17 @@
     if (Number.isFinite(snapshot.simulationH)) net.simulationH = snapshot.simulationH;
     if (Number.isFinite(snapshot.randomState)) gameRandomState = Number(snapshot.randomState) >>> 0;
     if (Number.isFinite(snapshot.entityCounter)) networkEntityCounter = Math.max(1, Number(snapshot.entityCounter) | 0);
+    const previousCheckpointX = checkpointX;
     if (Number.isFinite(snapshot.checkpointX)) checkpointX = snapshot.checkpointX;
+    if (!isNetworkAuthority() && checkpointX > previousCheckpointX + 8) audio.checkpoint();
+    if (!isNetworkAuthority() && snapshot.bannerText && snapshot.bannerText !== bannerText) {
+      showBanner(snapshot.bannerText, Math.max(0.35, Number(snapshot.bannerRemaining) || 1.0));
+    }
     if (typeof snapshot.levelState === "string") levelState = snapshot.levelState;
+    if (!isNetworkAuthority()) {
+      levelTransition = snapshot.levelTransition ? unpackNetworkValue(snapshot.levelTransition) : null;
+      stageIntro = snapshot.stageIntro ? unpackNetworkValue(snapshot.stageIntro) : null;
+    }
     if (typeof snapshot.gameOver === "boolean") gameOver = snapshot.gameOver;
     const incomingLevel = clamp(Number(snapshot.campaignLevel) || 0, 0, WORLD_ZONES.length - 1);
     if (incomingLevel !== campaignLevel) {
@@ -9651,12 +9715,47 @@
     pickups = mergeNetworkList(pickups, snapshot.pickups);
     setPieces = mergeNetworkList(setPieces, snapshot.setPieces);
     hazards = mergeNetworkList(hazards, snapshot.hazards);
+    debris = mergeNetworkList(debris, snapshot.debris);
     if (snapshot.activeBoss) {
-      activeBoss = restoreNetworkObject(snapshot.activeBoss, activeBoss && activeBoss.netId === snapshot.activeBoss.netId ? activeBoss : null);
-    } else if (activeBoss && activeBoss.dead) {
+      const sameBoss = activeBoss &&
+        activeBoss.netId === snapshot.activeBoss.netId &&
+        activeBoss.constructor && activeBoss.constructor.name === snapshot.activeBoss.__type;
+      activeBoss = restoreNetworkObject(snapshot.activeBoss, sameBoss ? activeBoss : null);
+    } else {
+      // Absence in an authority snapshot is authoritative. Never preserve a
+      // predicted/local boss simply because its local copy still has health.
       activeBoss = null;
+      clearBossArena();
     }
     applyBossArenaState(snapshot.bossArena, snapshot.activeBoss || null);
+
+    if (!isNetworkAuthority() && snapshot.victory) {
+      const state = snapshot.victory;
+      if (!victoryScene || !victoryScene.replica || victoryScene.bossKey !== state.bossKey) {
+        const profile = BOSS_PROFILES[state.bossKey] || (previousBoss && previousBoss.profile);
+        if (profile) {
+          const shell = previousBoss && previousBoss.key === state.bossKey ? previousBoss : {
+            key: state.bossKey,
+            name: state.name || profile.name,
+            profile,
+            x: Number(state.x) || 0, y: Number(state.y) || 0,
+            w: Number(state.w) || profile.w, h: Number(state.h) || profile.h,
+            score: Number(state.bossScore) || profile.score || 0,
+            phase: 0,
+            visualFacingScale: () => 1
+          };
+          bossDeaths.push(new BossDeathSequence(shell));
+          victoryScene = new BossVictoryScene(shell, true);
+        }
+      }
+      if (victoryScene && victoryScene.replica) {
+        if (Number.isFinite(Number(state.life))) victoryScene.life = Number(state.life);
+        if (Number.isFinite(Number(state.duration))) victoryScene.duration = Number(state.duration);
+        if (Number.isFinite(Number(state.elapsed))) victoryScene.elapsed = Number(state.elapsed);
+      }
+    } else if (!snapshot.victory && victoryScene && victoryScene.replica) {
+      victoryScene = null;
+    }
   }
 
   function updateNetwork(dt) {
@@ -9738,6 +9837,21 @@
     }
   }
 
+  function setNetworkAuthority(authorityId) {
+    const nextAuthority = Number(authorityId);
+    if (!Number.isFinite(nextAuthority)) return;
+    if (nextAuthority !== net.authorityId) {
+      net.authorityId = nextAuthority;
+      net.lastSnapshotSeq = 0;
+      net.pendingSnapshot = null;
+      net.snapshotSeq = 0;
+      net.clockTarget = null;
+    } else {
+      net.authorityId = nextAuthority;
+    }
+    if (isNetworkAuthority() && running) net.stateSendAt = 0;
+  }
+
   function handleNetworkMessage(message) {
     if (!message || typeof message !== "object") return;
     if (message.t === "versionError") {
@@ -9748,7 +9862,7 @@
       net.connected = true;
       net.localId = Number(message.id);
       net.ownerId = Number(message.ownerId);
-      net.authorityId = Number(message.authorityId);
+      setNetworkAuthority(message.authorityId);
       net.roomCode = normalizeRoomCode(message.code);
       net.phase = message.phase || "lobby";
       net.seed = Number(message.seed) || 1;
@@ -9771,7 +9885,7 @@
     }
     if (message.t === "lobby") {
       net.ownerId = Number(message.ownerId);
-      net.authorityId = Number(message.authorityId);
+      setNetworkAuthority(message.authorityId);
       net.phase = message.phase || net.phase;
       updateRoster(message.roster);
       if (message.settings) {
@@ -9781,8 +9895,7 @@
       return;
     }
     if (message.t === "authority") {
-      net.authorityId = Number(message.id);
-      if (isNetworkAuthority() && running) net.stateSendAt = 0;
+      setNetworkAuthority(message.id);
       return;
     }
     if (message.t === "input") {
@@ -10905,6 +11018,7 @@
       : normalStartX;
 
     networkEntityCounter = 1;
+    localPredictedEntityCounter = -1;
     if (onlineSession()) seedGameRandom(net.seed);
     else seedGameRandom((Date.now() ^ Math.floor(performance.now() * 1000)) >>> 0);
     const roster = onlineSession()
@@ -11138,6 +11252,7 @@
   }
 
   function startRival(stage, x, finalEncounter = false) {
+    if (onlineSession() && !isNetworkAuthority()) return false;
     const key = finalEncounter ? "reignHunterFinal" : `reignHunter${stage}`;
     if (activeBoss || defeatedBosses.has(key)) return false;
     const gadget = RIVAL_GADGETS[clamp(stage | 0, 0, RIVAL_GADGETS.length - 1)];
@@ -11153,6 +11268,7 @@
   }
 
   function startBoss(key, x) {
+    if (onlineSession() && !isNetworkAuthority()) return false;
     if (activeBoss || defeatedBosses.has(key)) return false;
     const profile = BOSS_PROFILES[key];
     showBanner(profile.name, 1.6);
@@ -11197,6 +11313,10 @@
   }
 
   function runScripts() {
+    // Scripted world mutation is authoritative online. Guests receive the
+    // resulting state through snapshots instead of independently creating
+    // bosses, debris, hazards, checkpoints, and encounter actors.
+    if (onlineSession() && !isNetworkAuthority()) return;
     const lead = Math.max(leadingPlayerX(true), introVehicle ? introVehicle.x : 0);
 
     for (let i = 0; i < scripts.length; i++) {
@@ -11420,7 +11540,7 @@
       return;
     }
 
-    if (bossArena) bossArena.update(dt);
+    if (bossArena && (!onlineSession() || isNetworkAuthority())) bossArena.update(dt);
     for (const platform of platforms) {
       if (!platform.arenaSuppressed) platform.update(dt);
     }
@@ -11442,10 +11562,12 @@
       for (const setPiece of setPieces) setPiece.update(dt);
 
       if (portalArrivalGrace <= 0 && stageEntryGrace <= 0) {
-        for (const enemy of enemies) enemy.update(dt);
-        resolveEnemySpacing();
-        if (activeBoss && !activeBoss.dead) activeBoss.update(dt);
-        if (enemyBullets.length > difficulty.projectileCap) {
+        if (!onlineSession() || isNetworkAuthority()) {
+          for (const enemy of enemies) enemy.update(dt);
+          resolveEnemySpacing();
+          if (activeBoss && !activeBoss.dead) activeBoss.update(dt);
+        }
+        if ((!onlineSession() || isNetworkAuthority()) && enemyBullets.length > difficulty.projectileCap) {
           const target = frontAlivePlayer();
           if (target) {
             enemyBullets.sort((a, b) => {
@@ -13026,7 +13148,7 @@
     ctx.fillStyle = UI_THEME.muted;
     ctx.font = `700 ${7 * scale}px ${UI_FONT}`;
     ctx.textAlign = "right";
-    ctx.fillText("v8.8.0 ONLINE", x + panelW - 8 * scale, y + panelH - 7 * scale);
+    ctx.fillText("v8.9.0 ONLINE", x + panelW - 8 * scale, y + panelH - 7 * scale);
   }
 
 
@@ -13285,7 +13407,7 @@
     ctx.fillStyle = UI_THEME.muted;
     ctx.font = `700 ${7 * scale}px ${UI_FONT}`;
     ctx.textAlign = "right";
-    ctx.fillText("v8.8.0 ONLINE", x + panelW - 8 * scale, y + panelH - 7 * scale);
+    ctx.fillText("v8.9.0 ONLINE", x + panelW - 8 * scale, y + panelH - 7 * scale);
   }
 
   function drawCharacterPreview(profile, cx, cy, scale, selected = false) {
@@ -13450,7 +13572,7 @@
     ctx.fillStyle = UI_THEME.muted;
     ctx.font = `700 ${7 * scale}px ${UI_FONT}`;
     ctx.textAlign = "right";
-    ctx.fillText("v8.8.0 ONLINE", x + panelW - 8 * scale, y + panelH - 7 * scale);
+    ctx.fillText("v8.9.0 ONLINE", x + panelW - 8 * scale, y + panelH - 7 * scale);
   }
 
   function drawCanvasMenu() {
@@ -14092,6 +14214,26 @@
     ctx.closePath();
   }
 
+
+  function recoverNetworkReplica(error) {
+    if (!onlineSession() || isNetworkAuthority()) return false;
+    console.error("Replica frame recovered", error);
+    // Drop only authoritative replicas that can be rebuilt by the next state
+    // packet. Keep players and local controls so the client remains connected.
+    enemies = [];
+    enemyBullets = [];
+    hazards = [];
+    setPieces = [];
+    debris = [];
+    activeBoss = null;
+    clearBossArena();
+    net.pendingSnapshot = null;
+    net.lastSnapshotSeq = 0;
+    net.clockTarget = null;
+    showBanner("SYNC RECOVERED", 0.8);
+    return true;
+  }
+
   function loop(now) {
     if (document.hidden) {
       last = now;
@@ -14105,19 +14247,24 @@
 
     if (!running && levelState === "menu") time += frame;
 
-    if (running && !paused) {
-      if (hitStop > 0) {
-        hitStop = Math.max(0, hitStop - frame);
-      } else {
-        accumulator += frame;
-        while (accumulator >= STEP) {
-          update(STEP);
-          accumulator -= STEP;
+    try {
+      if (running && !paused) {
+        if (hitStop > 0) {
+          hitStop = Math.max(0, hitStop - frame);
+        } else {
+          accumulator += frame;
+          while (accumulator >= STEP) {
+            update(STEP);
+            accumulator -= STEP;
+          }
         }
       }
-    }
 
-    draw();
+      draw();
+    } catch (error) {
+      if (!recoverNetworkReplica(error)) throw error;
+      accumulator = 0;
+    }
     requestAnimationFrame(loop);
   }
 
